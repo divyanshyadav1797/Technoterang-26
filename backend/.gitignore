@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# 🔐 SECRETS — Never commit these!
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+*.json.key
+*.env
+.env*
+! .env.example
+# IDE
+.vscode/
+.idea/

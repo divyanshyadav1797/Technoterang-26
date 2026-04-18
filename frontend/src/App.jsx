@@ -1,121 +1,138 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
+import './index.css';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+import Navbar from './components/Navbar';
+import Hero from './components/Hero';
+import FeatureGrid from './components/FeatureGrid';
+import AISection from './components/AISection';
+import FooterCTA from './components/FooterCTA';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ProfilePage from './pages/ProfilePage';
+import { UserSessionsProvider } from './context/UserSessionsContext';
 
+/**
+ * App — Root component.
+ *
+ * STATE LIFTING:  userName is owned here at the root so it can be:
+ *   • Written by LoginPage  via the `setUserName` prop callback.
+ *   • Read   by ProfilePage via the `userName` prop.
+ *
+ * This implements the Prop-Drilling / State-Lifting pattern as requested —
+ * no database or context needed; the name flows purely through React props.
+ */
+
+function HomePage() {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <main>
+      <Hero />
+      <FeatureGrid />
+      <AISection />
+      <FooterCTA />
+    </main>
+  );
 }
 
-export default App
+/**
+ * AnimatedRoutes — must be a child of BrowserRouter so useLocation() works.
+ * Wrapped in AnimatePresence to enable seamless Login → Profile transitions.
+ */
+function AnimatedRoutes({ isDark, toggleTheme, userName, setUserName }) {
+  const location = useLocation();
+
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <Routes location={location} key={location.pathname}>
+        {/* Homepage — shared Navbar + page layout */}
+        <Route
+          path="/"
+          element={
+            <div className="relative min-h-screen overflow-x-hidden bg-[var(--bg-color)]">
+              <Navbar isDark={isDark} toggleTheme={toggleTheme} />
+              <HomePage />
+            </div>
+          }
+        />
+
+        {/* Auth pages — full-screen standalone layouts */}
+        <Route
+          path="/login"
+          element={
+            <LoginPage
+              isDark={isDark}
+              toggleTheme={toggleTheme}
+              /* STATE LIFTING: LoginPage calls this to store the user's name
+                 in App-level state so ProfilePage can receive it as a prop. */
+              setUserName={setUserName}
+            />
+          }
+        />
+        <Route
+          path="/register"
+          element={<RegisterPage isDark={isDark} toggleTheme={toggleTheme} />}
+        />
+        <Route
+          path="/profile"
+          element={
+            /* PROP DRILLING: userName flows down from App → ProfilePage */
+            <ProfilePage isDark={isDark} toggleTheme={toggleTheme} userName={userName} />
+          }
+        />
+      </Routes>
+    </AnimatePresence>
+  );
+}
+
+function App() {
+  // ── Theme state ───────────────────────────────────────────────────────────
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('theme');
+      if (saved) return saved === 'dark';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+
+  // ── Lifted User Name state ────────────────────────────────────────────────
+  // Seeded from localStorage so a page refresh preserves the name.
+  const [userName, setUserName] = useState(() => {
+    try {
+      const stored = localStorage.getItem('peertutor_user');
+      if (stored) return JSON.parse(stored)?.full_name || '';
+    } catch { /* ignore */ }
+    return '';
+  });
+
+  // Apply 'dark' class to <html> so Tailwind dark: and CSS vars both work
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDark) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDark]);
+
+  const toggleTheme = () => setIsDark((prev) => !prev);
+
+  return (
+    <UserSessionsProvider>
+      <BrowserRouter>
+        <AnimatedRoutes
+          isDark={isDark}
+          toggleTheme={toggleTheme}
+          userName={userName}
+          setUserName={setUserName}
+        />
+      </BrowserRouter>
+    </UserSessionsProvider>
+  );
+}
+
+export default App;
