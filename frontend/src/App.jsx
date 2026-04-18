@@ -1,29 +1,43 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import './index.css';
+import './App.css';
+
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import FeatureGrid from './components/FeatureGrid';
 import AISection from './components/AISection';
 import FooterCTA from './components/FooterCTA';
 
-// Placeholder components for routing
-const Login = () => <div className="min-h-screen flex items-center justify-center text-4xl font-bold">Login Page</div>;
-const Register = () => <div className="min-h-screen flex items-center justify-center text-4xl font-bold">Register Page</div>;
+/**
+ * App — Root component.
+ * Manages dark/light mode state and persists it to localStorage.
+ * Wraps the app in BrowserRouter for react-router-dom <Link> tags.
+ */
+function HomePage() {
+  return (
+    <main>
+      <Hero />
+      <FeatureGrid />
+      <AISection />
+      <FooterCTA />
+    </main>
+  );
+}
 
 function App() {
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
-      const savedTheme = localStorage.getItem('theme');
-      if (savedTheme) {
-        return savedTheme === 'dark';
-      }
-      return true; // Default to Dark Mode
+      const saved = localStorage.getItem('theme');
+      if (saved) return saved === 'dark';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
-    return true;
+    return false;
   });
 
+  // Apply 'dark' class to <html> so Tailwind dark: and CSS vars both work
   useEffect(() => {
-    const root = window.document.documentElement;
+    const root = document.documentElement;
     if (isDark) {
       root.classList.add('dark');
       localStorage.setItem('theme', 'dark');
@@ -33,30 +47,21 @@ function App() {
     }
   }, [isDark]);
 
-  const toggleTheme = () => {
-    setIsDark(!isDark);
-  };
+  const toggleTheme = () => setIsDark((prev) => !prev);
 
   return (
-    <Router>
-      <div className="min-h-screen bg-[var(--bg-color)] text-[var(--text-primary)] transition-colors duration-300 font-sans selection:bg-[var(--accent-color)] selection:text-[var(--bg-color)]">
+    <BrowserRouter>
+      <div className="relative min-h-screen overflow-x-hidden bg-[var(--bg-color)]">
+        {/* Sticky glassmorphism navbar */}
         <Navbar isDark={isDark} toggleTheme={toggleTheme} />
-        <main>
-          <Routes>
-            <Route path="/" element={
-              <>
-                <Hero />
-                <FeatureGrid />
-                <AISection />
-                <FooterCTA />
-              </>
-            } />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-          </Routes>
-        </main>
+
+        {/* Page routes — swap for full React Router setup as needed */}
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          {/* Add /login, /register routes here when ready */}
+        </Routes>
       </div>
-    </Router>
+    </BrowserRouter>
   );
 }
 

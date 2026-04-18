@@ -1,49 +1,70 @@
-import React from 'react';
-import { Moon, Sun, BookOpen } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Moon, Sun, BookOpen } from 'lucide-react';
+import Magnet from './react-bits/Magnet';
 
+/**
+ * Navbar — Glassmorphism sticky navbar with Magnet buttons & dark/light toggle.
+ */
 const Navbar = ({ isDark, toggleTheme }) => {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
-    <nav className="sticky top-0 z-50 w-full bg-[var(--bg-color)] border-b border-[var(--border-color)] transition-colors duration-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          
-          {/* Logo */}
-          <div className="flex-shrink-0 flex items-center cursor-pointer">
-            <BookOpen className="h-6 w-6 text-[var(--text-primary)]" />
-            <span className="ml-3 text-lg font-semibold tracking-tighter text-[var(--text-primary)]">
-              PeerTutor
-            </span>
+    <nav
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${scrolled
+        ? 'bg-[var(--bg-color)]/70 backdrop-blur-xl shadow-lg border-b border-white/10'
+        : 'bg-transparent'
+        }`}
+    >
+      <div className="max-w-7xl mx-auto px-6 lg:px-10 flex justify-between items-center h-20">
+        {/* Logo */}
+        <Link to="/" className="flex items-center gap-3 group">
+          <div className="w-9 h-9 rounded-xl bg-[var(--primary-color)] flex items-center justify-center group-hover:rotate-12 transition-transform duration-300">
+            <BookOpen className="w-5 h-5 text-white" />
           </div>
+          <span className="text-xl font-bold tracking-tight text-[var(--text-primary)]">
+            PeerTutor
+          </span>
+        </Link>
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
-            
-            {/* Theme Toggle */}
-            <button
-              onClick={toggleTheme}
-              className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-              aria-label="Toggle Dark Mode"
-            >
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
+        {/* Controls */}
+        <div className="flex items-center gap-4">
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+            className="w-10 h-10 rounded-full flex items-center justify-center text-[var(--primary-color)] hover:bg-[var(--primary-color)]/10 transition-colors duration-200"
+          >
+            {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
 
-            {/* Auth Buttons */}
-            <Link 
-              to="/login" 
-              className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline underline-offset-4 transition-all"
+          {/* Login — Magnet effect */}
+          <Magnet strength={0.35} radius={100}>
+            <Link
+              to="/login"
+              id="nav-login"
+              className="px-5 py-2 rounded-full text-[var(--primary-color)] font-semibold border border-[var(--primary-color)]/30 hover:border-[var(--primary-color)] hover:bg-[var(--primary-color)]/10 transition-all duration-200 text-sm"
             >
               Login
             </Link>
+          </Magnet>
 
+          {/* Register — Magnet effect */}
+          <Magnet strength={0.4} radius={110}>
             <Link
               to="/register"
-              className="px-5 py-2 bg-[var(--accent-color)] text-[#09264A] text-sm font-semibold border border-transparent hover:brightness-110 transition-all rounded-sm"
+              id="nav-register"
+              className="px-5 py-2 rounded-full bg-[var(--accent-color)] text-white font-bold text-sm shadow-lg hover:brightness-110 hover:shadow-[var(--accent-color)]/40 hover:shadow-xl transition-all duration-200"
             >
               Register
             </Link>
-          </div>
-
+          </Magnet>
         </div>
       </div>
     </nav>

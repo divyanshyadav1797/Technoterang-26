@@ -1,102 +1,73 @@
-import React, { useRef } from 'react';
-import { motion, useTransform, useMotionValue, useSpring } from 'framer-motion';
+/**
+ * VariableProximity — React Bits inspired implementation
+ * Characters scale/bold based on proximity to the user's cursor.
+ */
+import { useRef, useEffect, useState, useCallback } from 'react';
 
-const VariableProximity = ({ text, radius = 200, className = '' }) => {
-  const containerRef = useRef(null);
-  const mouseX = useMotionValue(Infinity);
-  const mouseY = useMotionValue(Infinity);
+const VariableProximity = ({
+  label = '',
+  className = '',
+  radius = 120,
+  falloff = 'linear',
+  containerRef,
+}) => {
+  const [mousePos, setMousePos] = useState({ x: -9999, y: -9999 });
 
-  const handleMouseMove = (e) => {
-    mouseX.set(e.clientX);
-    mouseY.set(e.clientY);
-  };
+  useEffect(() => {
+    const target = containerRef?.current ?? window;
+    const handler = (e) => setMousePos({ x: e.clientX, y: e.clientY });
+    target.addEventListener('mousemove', handler);
+    return () => target.removeEventListener('mousemove', handler);
+  }, [containerRef]);
 
-  const handleMouseLeave = () => {
-    mouseX.set(Infinity);
-    mouseY.set(Infinity);
-  };
+  const getWeight = useCallback(
+    (el) => {
+      if (!el) return 400;
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dist = Math.sqrt((mousePos.x - cx) ** 2 + (mousePos.y - cy) ** 2);
+      const t = Math.max(0, 1 - dist / radius);
+      const eased = falloff === 'exponential' ? t * t : t;
+      return Math.round(400 + eased * 500); // 400 → 900
+    },
+    [mousePos, radius, falloff]
+  );
+
+  const chars = label.split('');
 
   return (
-    <div
-      ref={containerRef}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      className={`flex flex-wrap gap-1 ${className}`}
-    >
-      {text.split('').map((char, index) => {
-        if (char === ' ') return <span key={index} className="w-2" />;
-        return (
-          <ProximityChar
-            key={index}
-            char={char}
-            mouseX={mouseX}
-            mouseY={mouseY}
-            radius={radius}
-          />
-        );
-      })}
-    </div>
+    <span className={className} aria-label={label} style={{ display: 'inline' }}>
+      {chars.map((char, i) => (
+        <Char key={i} char={char} getWeight={getWeight} />
+      ))}
+    </span>
   );
 };
 
-const ProximityChar = ({ char, mouseX, mouseY, radius }) => {
-  const charRef = useRef(null);
-  
-  // Create motion values that will be updated based on distance
-  const distance = useMotionValue(Infinity);
-  
-  // Calculate distance in a requestAnimationFrame loop or use simple distance calculation on render
-  // Since we can't easily hook into mouse move for every character efficiently without a loop,
-  // we'll use framer-motion's useTransform on the shared mouse coordinates.
-  
-  const scale = useSpring(
-    useTransform(() => {
-      if (!charRef.current) return 1;
-      const rect = charRef.current.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      
-      const dist = Math.sqrt(
-        Math.pow(mouseX.get() - centerX, 2) + Math.pow(mouseY.get() - centerY, 2)
-      );
-      
-      if (dist < radius) {
-        // Map distance [0, radius] to scale [1.5, 1]
-        return 1 + (0.5 * (1 - dist / radius));
-      }
-      return 1;
-    }),
-    { damping: 20, stiffness: 200 }
-  );
+const Char = ({ char, getWeight }) => {
+  const ref = useRef(null);
+  const [weight, setWeight] = useState(400);
 
-  const fontWeight = useSpring(
-    useTransform(() => {
-      if (!charRef.current) return 400;
-      const rect = charRef.current.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      
-      const dist = Math.sqrt(
-        Math.pow(mouseX.get() - centerX, 2) + Math.pow(mouseY.get() - centerY, 2)
-      );
-      
-      if (dist < radius) {
-        // Map distance [0, radius] to weight [800, 400]
-        return 400 + (400 * (1 - dist / radius));
-      }
-      return 400;
-    }),
-    { damping: 20, stiffness: 200 }
-  );
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      setWeight(getWeight(ref.current));
+    });
+    return () => cancelAnimationFrame(id);
+  });
 
   return (
-    <motion.span
-      ref={charRef}
-      style={{ scale, fontWeight }}
-      className="inline-block transition-colors"
+    <span
+      ref={ref}
+      style={{
+        fontWeight: weight,
+        transition: 'font-weight 0.15s ease',
+        display: 'inline-block',
+        whiteSpace: char === ' ' ? 'pre' : undefined,
+      }}
     >
       {char}
-    </motion.span>
+    </span>
   );
 };
 

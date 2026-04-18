@@ -1,58 +1,62 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { motion, useAnimation } from 'framer-motion';
+/**
+ * SpotlightCard — React Bits inspired implementation
+ * A card where a coloured glow follows the user's cursor.
+ */
+import { useRef, useCallback } from 'react';
 
-const SpotlightCard = ({ children, className = '' }) => {
-  const divRef = useRef(null);
-  const [isFocused, setIsFocused] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [opacity, setOpacity] = useState(0);
+const SpotlightCard = ({
+  children,
+  className = '',
+  spotlightColor = 'rgba(255,166,48,0.15)',
+}) => {
+  const cardRef = useRef(null);
 
-  const handleMouseMove = (e) => {
-    if (!divRef.current || isFocused) return;
+  const handleMouseMove = useCallback((e) => {
+    const card = cardRef.current;
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    card.style.setProperty('--spotlight-x', `${x}px`);
+    card.style.setProperty('--spotlight-y', `${y}px`);
+    card.style.setProperty('--spotlight-color', spotlightColor);
+  }, [spotlightColor]);
 
-    const div = divRef.current;
-    const rect = div.getBoundingClientRect();
-
-    setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-  };
-
-  const handleFocus = () => {
-    setIsFocused(true);
-    setOpacity(1);
-  };
-
-  const handleBlur = () => {
-    setIsFocused(false);
-    setOpacity(0);
-  };
-
-  const handleMouseEnter = () => {
-    setOpacity(1);
-  };
-
-  const handleMouseLeave = () => {
-    setOpacity(0);
-  };
+  const handleMouseLeave = useCallback(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    card.style.setProperty('--spotlight-x', `-9999px`);
+    card.style.setProperty('--spotlight-y', `-9999px`);
+  }, []);
 
   return (
     <div
-      ref={divRef}
+      ref={cardRef}
+      className={`spotlight-card ${className}`}
       onMouseMove={handleMouseMove}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className={`relative overflow-hidden rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#061830] transition-colors ${className}`}
+      style={{
+        '--spotlight-x': '-9999px',
+        '--spotlight-y': '-9999px',
+        '--spotlight-color': spotlightColor,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
     >
-      <motion.div
-        className="pointer-events-none absolute -inset-px opacity-0 transition duration-300"
+      {/* Spotlight radial overlay */}
+      <div
+        aria-hidden
         style={{
-          opacity,
-          background: `radial-gradient(600px circle at ${position.x}px ${position.y}px, var(--accent-color), transparent 40%)`,
+          position: 'absolute',
+          inset: 0,
+          background:
+            'radial-gradient(300px circle at var(--spotlight-x) var(--spotlight-y), var(--spotlight-color), transparent 70%)',
+          pointerEvents: 'none',
+          zIndex: 0,
+          transition: 'background 0.05s',
         }}
       />
-      <div className="absolute inset-[1px] rounded-3xl bg-white dark:bg-[#061830] z-0" />
-      <div className="relative z-10">{children}</div>
+      <div style={{ position: 'relative', zIndex: 1 }}>{children}</div>
     </div>
   );
 };

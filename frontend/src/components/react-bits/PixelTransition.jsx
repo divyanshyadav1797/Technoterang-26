@@ -1,75 +1,79 @@
-import React, { useState } from 'react';
+/**
+ * PixelTransition — React Bits inspired implementation
+ * Reveals new content using a spreading pixel/block dissolve animation.
+ */
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const PixelTransition = ({ 
-  children, 
-  activeComponentIndex = 0, 
-  gridSize = 7, 
-  transitionDuration = 0.5 
-}) => {
-  const [internalIndex, setInternalIndex] = useState(activeComponentIndex);
-  const [isAnimating, setIsAnimating] = useState(false);
+const GRID_SIZE = 8; // 8x8 pixel blocks
 
-  // When activeComponentIndex changes, trigger animation
-  if (activeComponentIndex !== internalIndex && !isAnimating) {
-    setIsAnimating(true);
-    // Halfway through the transition, swap the content
-    setTimeout(() => {
-      setInternalIndex(activeComponentIndex);
-    }, transitionDuration * 500); // Wait half the duration for blocks to cover
-    
-    setTimeout(() => {
-      setIsAnimating(false);
-    }, transitionDuration * 1000 + (gridSize * gridSize * 10)); // Total time including stagger
+const generateBlocks = () => {
+  const blocks = [];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      blocks.push({ r, c, delay: Math.random() * 0.4 });
+    }
   }
+  return blocks;
+};
 
-  // Create grid cells
-  const cells = [];
-  for (let i = 0; i < gridSize * gridSize; i++) {
-    cells.push(i);
-  }
+const blocks = generateBlocks();
+
+const PixelTransition = ({ children, trigger, accentColor = 'var(--accent-color)', className = '' }) => {
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [activeChild, setActiveChild] = useState(0);
+  const childArray = Array.isArray(children) ? children : [children];
+
+  const handleTransition = () => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setActiveChild((prev) => (prev + 1) % childArray.length);
+      setTimeout(() => setIsTransitioning(false), 500);
+    }, 500);
+  };
 
   return (
-    <div className="relative overflow-hidden w-full h-full rounded-3xl">
-      {/* Content Container */}
-      <div className="w-full h-full relative z-0">
-        {children[internalIndex]}
+    <div className={`relative overflow-hidden ${className}`} style={{ position: 'relative' }}>
+      <div onClick={handleTransition} style={{ cursor: 'pointer' }}>
+        {childArray[activeChild]}
       </div>
 
-      {/* Pixel Overlay */}
       <AnimatePresence>
-        {isAnimating && (
-          <div 
-            className="absolute inset-0 z-10 grid"
-            style={{ 
-              gridTemplateColumns: `repeat(${gridSize}, 1fr)`,
-              gridTemplateRows: `repeat(${gridSize}, 1fr)` 
+        {isTransitioning && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'grid',
+              gridTemplateColumns: `repeat(${GRID_SIZE}, 1fr)`,
+              gridTemplateRows: `repeat(${GRID_SIZE}, 1fr)`,
+              pointerEvents: 'none',
+              zIndex: 20,
             }}
           >
-            {cells.map((index) => {
-              // Calculate a staggered delay based on position
-              const row = Math.floor(index / gridSize);
-              const col = index % gridSize;
-              const delay = (row + col) * 0.02;
-
-              return (
-                <motion.div
-                  key={`pixel-${index}`}
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1.05, opacity: 1 }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={{ 
-                    duration: transitionDuration * 0.5, 
-                    delay,
-                    ease: "easeInOut"
-                  }}
-                  className="bg-[var(--accent-color)] w-full h-full"
-                />
-              );
-            })}
+            {blocks.map(({ r, c, delay }) => (
+              <motion.div
+                key={`${r}-${c}`}
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0 }}
+                transition={{ duration: 0.25, delay }}
+                style={{ backgroundColor: accentColor }}
+              />
+            ))}
           </div>
         )}
       </AnimatePresence>
+
+      {trigger && (
+        <button
+          onClick={handleTransition}
+          className="absolute bottom-3 right-3 text-xs px-3 py-1 rounded-full bg-[var(--accent-color)] text-white font-semibold z-10"
+        >
+          {trigger}
+        </button>
+      )}
     </div>
   );
 };

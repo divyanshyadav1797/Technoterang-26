@@ -1,37 +1,61 @@
-import React from 'react';
-import { motion } from 'framer-motion';
+/**
+ * RollingSteps — React Bits inspired implementation
+ * Sequentially reveals numbered steps with an animated roll-in.
+ */
+import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState } from 'react';
 
-const RollingSteps = ({ steps, className = '' }) => {
+const RollingSteps = ({ steps = [], interval = 2000, accentColor = 'var(--accent-color)' }) => {
+  const [activeStep, setActiveStep] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveStep((prev) => (prev + 1) % steps.length);
+    }, interval);
+    return () => clearInterval(timer);
+  }, [steps.length, interval]);
+
   return (
-    <div className={`relative ${className}`}>
-      <div className="absolute left-8 top-0 bottom-0 w-1 bg-[var(--primary-color)]/20 rounded-full" />
-      
-      <div className="space-y-12">
-        {steps.map((step, index) => (
+    <div className="space-y-3">
+      {steps.map((step, i) => {
+        const isActive = i === activeStep;
+        const isPast = i < activeStep;
+        return (
           <motion.div
-            key={index}
-            initial={{ opacity: 0, x: -50 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.5, delay: index * 0.2 }}
-            className="relative flex items-start pl-20"
+            key={i}
+            animate={{
+              opacity: isActive ? 1 : isPast ? 0.5 : 0.25,
+              x: isActive ? 0 : -8,
+            }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+            className="flex items-start gap-4"
           >
-            <div className="absolute left-4 -translate-x-1/2 flex h-8 w-8 items-center justify-center rounded-full border-4 border-[var(--bg-color)] bg-[var(--accent-color)] shadow-lg shadow-[var(--accent-color)]/50 z-10">
-              <span className="text-xs font-bold text-[var(--bg-color)]">{index + 1}</span>
+            <div
+              className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white transition-colors duration-300"
+              style={{ backgroundColor: isActive ? accentColor : 'rgba(128,128,128,0.3)' }}
+            >
+              {isPast ? '✓' : i + 1}
             </div>
-            
-            <div className="glass p-6 rounded-3xl w-full hover:scale-[1.02] transition-transform duration-300">
-              <h4 className="text-xl font-bold mb-2 flex items-center gap-2">
-                {step.icon && <step.icon className="text-[var(--primary-color)]" size={24} />}
+            <div>
+              <div className={`font-semibold text-[var(--text-primary)] ${isActive ? '' : 'opacity-50'}`}>
                 {step.title}
-              </h4>
-              <p className="text-[var(--text-secondary)] opacity-80">
-                {step.description}
-              </p>
+              </div>
+              <AnimatePresence>
+                {isActive && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="text-sm text-[var(--text-secondary)] mt-1"
+                  >
+                    {step.description}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </motion.div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 };
