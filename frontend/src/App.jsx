@@ -8,6 +8,8 @@ import Hero from './components/Hero';
 import FeatureGrid from './components/FeatureGrid';
 import AISection from './components/AISection';
 import FooterCTA from './components/FooterCTA';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 
 /**
  * App — Root component.
@@ -51,16 +53,22 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="relative min-h-screen overflow-x-hidden bg-[var(--bg-color)]">
-        {/* Sticky glassmorphism navbar */}
-        <Navbar isDark={isDark} toggleTheme={toggleTheme} />
+      <Routes>
+        {/* Homepage — shared Navbar + page layout */}
+        <Route
+          path="/"
+          element={
+            <div className="relative min-h-screen overflow-x-hidden bg-[var(--bg-color)]">
+              <Navbar isDark={isDark} toggleTheme={toggleTheme} />
+              <HomePage />
+            </div>
+          }
+        />
 
-        {/* Page routes — swap for full React Router setup as needed */}
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          {/* Add /login, /register routes here when ready */}
-        </Routes>
-      </div>
+        {/* Auth pages — full-screen standalone layouts */}
+        <Route path="/login"    element={<LoginPage    isDark={isDark} toggleTheme={toggleTheme} />} />
+        <Route path="/register" element={<RegisterPage isDark={isDark} toggleTheme={toggleTheme} />} />
+      </Routes>
     </BrowserRouter>
   );
 }
