@@ -36,7 +36,7 @@ FIREBASE_WEB_API_KEY = os.getenv("FIREBASE_WEB_API_KEY", "")
 # ── Firebase Admin Initialisation ─────────────────────────
 SERVICE_ACCOUNT_PATH = (
     Path(__file__).parent
-    / "peer-2-peer-data-firebase-adminsdk-fbsvc-131558db09.json"
+    / "peer-2-peer-data-firebase-adminsdk-fbsvc-5f70a997c7.json"
 )
 
 if not firebase_admin._apps:
