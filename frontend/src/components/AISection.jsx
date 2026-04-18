@@ -67,7 +67,7 @@ const AISection = () => {
         >
           <SpotlightCard
             spotlightColor="rgba(25,130,196,0.2)"
-            className="rounded-3xl border border-[var(--primary-color)]/20 bg-white dark:bg-[#0d2f52] shadow-sm hover:shadow-xl p-8"
+            className="rounded-3xl border border-[var(--primary-color)]/20 bg-[#ffffff] dark:bg-[#0d2f52] shadow-sm hover:shadow-xl transition-all duration-300 p-8"
           >
             {/* Card header */}
             <div className="flex items-center gap-3 mb-8">

@@ -116,7 +116,7 @@ const FeatureGrid = () => {
         <motion.div variants={cardVariants} className="md:col-span-2 md:row-span-1">
           <SpotlightCard
             spotlightColor={features[0].accent}
-            className="h-full rounded-3xl border border-[var(--primary-color)]/20 bg-white dark:bg-[#0d2f52] hover:border-[var(--primary-color)]/50 transition-colors duration-300 group shadow-sm hover:shadow-xl"
+            className="h-full rounded-3xl border border-[var(--primary-color)]/20 bg-[#ffffff] dark:bg-[#0d2f52] hover:border-[var(--primary-color)]/50 transition-all duration-300 group shadow-sm hover:shadow-xl"
           >
             <div className="p-8 h-full flex flex-col justify-between">
               <div className="w-12 h-12 rounded-2xl bg-[var(--primary-color)]/10 flex items-center justify-center text-[var(--primary-color)] group-hover:scale-110 group-hover:bg-[var(--primary-color)] group-hover:text-white transition-all duration-300">
@@ -140,7 +140,7 @@ const FeatureGrid = () => {
         <motion.div variants={cardVariants} className="md:col-span-2 md:row-span-2">
           <SpotlightCard
             spotlightColor={features[1].accent}
-            className="h-full rounded-3xl border border-[var(--primary-color)]/20 bg-white dark:bg-[#0d2f52] hover:border-[var(--primary-color)]/50 transition-colors duration-300 group overflow-hidden shadow-sm hover:shadow-xl"
+            className="h-full rounded-3xl border border-[var(--primary-color)]/20 bg-[#ffffff] dark:bg-[#0d2f52] hover:border-[var(--primary-color)]/50 transition-all duration-300 group overflow-hidden shadow-sm hover:shadow-xl"
           >
             <div className="h-full flex flex-col">
               {/* Header */}
@@ -174,7 +174,7 @@ const FeatureGrid = () => {
         <motion.div variants={cardVariants} className="md:col-span-2 md:row-span-1">
           <SpotlightCard
             spotlightColor={features[2].accent}
-            className="h-full rounded-3xl border border-[var(--accent-color)]/20 bg-white dark:bg-[#0d2f52] hover:border-[var(--accent-color)]/50 transition-colors duration-300 group shadow-sm hover:shadow-xl"
+            className="h-full rounded-3xl border border-[var(--accent-color)]/20 bg-[#ffffff] dark:bg-[#0d2f52] hover:border-[var(--accent-color)]/50 transition-all duration-300 group shadow-sm hover:shadow-xl"
           >
             <div className="p-8 h-full flex flex-col justify-between">
               <div className="w-12 h-12 rounded-2xl bg-[var(--accent-color)]/10 flex items-center justify-center text-[var(--accent-color)] group-hover:scale-110 group-hover:bg-[var(--accent-color)] group-hover:text-white transition-all duration-300">

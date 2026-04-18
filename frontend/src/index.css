@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Enable Tailwind dark: variant to respond to .dark class on <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ─── Theme: CSS Custom Properties ──────────────────────────────────── */
 :root {
   /* Light Mode */

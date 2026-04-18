@@ -29,7 +29,7 @@ const FooterCTA = () => {
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.7, ease: 'easeOut' }}
-          className="rounded-3xl border border-[var(--primary-color)]/20 bg-white dark:bg-[#0d2f52] shadow-xl p-16 md:p-24 space-y-8"
+          className="rounded-3xl border border-[var(--primary-color)]/20 bg-[#ffffff] dark:bg-[#0d2f52] shadow-xl transition-all duration-300 p-16 md:p-24 space-y-8"
         >
           <p className="text-xs font-bold uppercase tracking-[0.25em] text-[var(--accent-color)]">
             Get Started Today

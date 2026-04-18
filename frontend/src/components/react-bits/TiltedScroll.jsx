@@ -30,7 +30,7 @@ const TiltedScroll = ({ items = [] }) => {
         {items.map((item, i) => (
           <div
             key={i}
-            className="rounded-xl border border-[var(--primary-color)]/20 bg-white dark:bg-[#0d2f52] p-4 text-sm text-[var(--text-secondary)]"
+            className="rounded-xl border border-[var(--primary-color)]/20 bg-[#ffffff] dark:bg-[#0d2f52] p-4 text-sm text-[var(--text-secondary)] transition-all duration-300"
             style={{
               opacity: i > 2 ? 0.5 : 1,
             }}
