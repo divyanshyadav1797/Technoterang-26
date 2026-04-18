@@ -227,7 +227,7 @@ class x {
     this.clear();
     this.#t?.dispose();
     this.renderer.dispose();
-    this.renderer.forceContextLoss();
+    // this.renderer.forceContextLoss();
     this.isDisposed = true;
   }
 }
