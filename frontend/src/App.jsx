@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import './index.css';
 import './App.css';
 
@@ -14,9 +15,15 @@ import ProfilePage from './pages/ProfilePage';
 
 /**
  * App — Root component.
- * Manages dark/light mode state and persists it to localStorage.
- * Wraps the app in BrowserRouter for react-router-dom <Link> tags.
+ *
+ * STATE LIFTING:  userName is owned here at the root so it can be:
+ *   • Written by LoginPage  via the `setUserName` prop callback.
+ *   • Read   by ProfilePage via the `userName` prop.
+ *
+ * This implements the Prop-Drilling / State-Lifting pattern as requested —
+ * no database or context needed; the name flows purely through React props.
  */
+
 function HomePage() {
   return (
     <main>
@@ -28,7 +35,58 @@ function HomePage() {
   );
 }
 
+/**
+ * AnimatedRoutes — must be a child of BrowserRouter so useLocation() works.
+ * Wrapped in AnimatePresence to enable seamless Login → Profile transitions.
+ */
+function AnimatedRoutes({ isDark, toggleTheme, userName, setUserName }) {
+  const location = useLocation();
+
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <Routes location={location} key={location.pathname}>
+        {/* Homepage — shared Navbar + page layout */}
+        <Route
+          path="/"
+          element={
+            <div className="relative min-h-screen overflow-x-hidden bg-[var(--bg-color)]">
+              <Navbar isDark={isDark} toggleTheme={toggleTheme} />
+              <HomePage />
+            </div>
+          }
+        />
+
+        {/* Auth pages — full-screen standalone layouts */}
+        <Route
+          path="/login"
+          element={
+            <LoginPage
+              isDark={isDark}
+              toggleTheme={toggleTheme}
+              /* STATE LIFTING: LoginPage calls this to store the user's name
+                 in App-level state so ProfilePage can receive it as a prop. */
+              setUserName={setUserName}
+            />
+          }
+        />
+        <Route
+          path="/register"
+          element={<RegisterPage isDark={isDark} toggleTheme={toggleTheme} />}
+        />
+        <Route
+          path="/profile"
+          element={
+            /* PROP DRILLING: userName flows down from App → ProfilePage */
+            <ProfilePage isDark={isDark} toggleTheme={toggleTheme} userName={userName} />
+          }
+        />
+      </Routes>
+    </AnimatePresence>
+  );
+}
+
 function App() {
+  // ── Theme state ───────────────────────────────────────────────────────────
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');
@@ -36,6 +94,16 @@ function App() {
       return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
     return false;
+  });
+
+  // ── Lifted User Name state ────────────────────────────────────────────────
+  // Seeded from localStorage so a page refresh preserves the name.
+  const [userName, setUserName] = useState(() => {
+    try {
+      const stored = localStorage.getItem('peertutor_user');
+      if (stored) return JSON.parse(stored)?.full_name || '';
+    } catch { /* ignore */ }
+    return '';
   });
 
   // Apply 'dark' class to <html> so Tailwind dark: and CSS vars both work
@@ -54,23 +122,12 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Homepage — shared Navbar + page layout */}
-        <Route
-          path="/"
-          element={
-            <div className="relative min-h-screen overflow-x-hidden bg-[var(--bg-color)]">
-              <Navbar isDark={isDark} toggleTheme={toggleTheme} />
-              <HomePage />
-            </div>
-          }
-        />
-
-        {/* Auth pages — full-screen standalone layouts */}
-        <Route path="/login"    element={<LoginPage    isDark={isDark} toggleTheme={toggleTheme} />} />
-        <Route path="/register" element={<RegisterPage isDark={isDark} toggleTheme={toggleTheme} />} />
-        <Route path="/profile"  element={<ProfilePage  isDark={isDark} />} />
-      </Routes>
+      <AnimatedRoutes
+        isDark={isDark}
+        toggleTheme={toggleTheme}
+        userName={userName}
+        setUserName={setUserName}
+      />
     </BrowserRouter>
   );
 }

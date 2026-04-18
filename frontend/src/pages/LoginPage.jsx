@@ -63,7 +63,7 @@ const SocialButton = ({ icon: Icon, label }) => (
 /**
  * LoginPage — calls backend POST /login and redirects to /profile on success.
  */
-const LoginPage = ({ isDark }) => {
+const LoginPage = ({ isDark, setUserName }) => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
@@ -98,6 +98,11 @@ const LoginPage = ({ isDark }) => {
       // Step 3 — Save profile and redirect
       localStorage.setItem('peertutor_user', JSON.stringify(data.user));
       localStorage.setItem('peertutor_token', idToken);
+
+      // STATE LIFTING: push the authenticated user's name up to App state
+      // so ProfileView receives it immediately as a prop (no DB re-fetch needed).
+      if (setUserName) setUserName(data.user?.full_name || email.split('@')[0]);
+
       navigate('/profile');
 
     } catch (err) {
