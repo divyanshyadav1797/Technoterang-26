@@ -1,43 +1,34 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, LogOut, Zap, Radio, Globe, Lock, ArrowRight, Users, Star, Cpu, Download, Settings2, Sun, Moon } from 'lucide-react';
+import { BookOpen, LogOut, Zap, Radio, Globe, Lock, ArrowRight, Users, Star, Cpu, Download, Settings2, Sun, Moon, TrendingUp, Clock, CalendarDays, Trash2 } from 'lucide-react';
 import CosmosBackground from '../components/CosmosBackground';
 import FloatingParticles from '../components/FloatingParticles';
 import ScheduleOrbit from '../components/ScheduleOrbit';
+import SessionLauncher from '../components/SessionLauncher';
 import { TimetableProvider, useTimetable } from '../context/TimetableContext';
+import { useUserSessions } from '../context/UserSessionsContext';
 import html2canvas from 'html2canvas';
 
-// ── Cosmic Data ───────────────────────────────────────────────────────────────
+
+// ── Cosmic Data ──────────────────────────────────────────────────────────────
 const COSMIC_TITLES = ['Celestial Coder','The Logic Architect','Quantum Explorer','Neural Navigator','Data Conjurer','Algorithm Alchemist'];
+
 const AURA_COLORS = [
   { border: '#FFCA3A', shadow: 'rgba(255,202,58,0.55)',  label: 'Solar Gold' },
   { border: '#669BBC', shadow: 'rgba(102,155,188,0.55)', label: 'Sky Pulse' },
   { border: '#a78bfa', shadow: 'rgba(167,139,250,0.55)', label: 'Violet Nebula' },
   { border: '#34d399', shadow: 'rgba(52,211,153,0.55)',  label: 'Emerald Drift' },
 ];
-const PUBLIC_SESSIONS = [
-  { id:1, title:'React Hooks Help', subject:'Frontend', peers:4, icon:'⚛️' },
-  { id:2, title:'Python for AI',    subject:'ML / AI',  peers:7, icon:'🐍' },
-  { id:3, title:'DSA Crash Course', subject:'CS Basics',peers:12,icon:'🌳' },
-  { id:4, title:'System Design',    subject:'Backend',  peers:6, icon:'🏗️' },
-];
-const MOCK_SESSIONS = [
-  { day:'Mon', startHour:9,  endHour:10, role:'student', title:'React Hooks Help',    subject:'Frontend' },
-  { day:'Mon', startHour:11, endHour:13, role:'tutor',   title:'JS Fundamentals',     subject:'Frontend' },
-  { day:'Tue', startHour:10, endHour:12, role:'student', title:'Python for AI',        subject:'ML / AI'  },
-  { day:'Tue', startHour:14, endHour:16, role:'tutor',   title:'Algo Masterclass',    subject:'CS Basics'},
-  { day:'Wed', startHour:8,  endHour:9,  role:'student', title:'Calculus Deep Dive',  subject:'Maths'    },
-  { day:'Thu', startHour:9,  endHour:10, role:'tutor',   title:'Pandas & NumPy',      subject:'ML / AI'  },
-  { day:'Fri', startHour:13, endHour:15, role:'tutor',   title:'React Advanced',      subject:'Frontend' },
-  { day:'Sat', startHour:10, endHour:11, role:'student', title:'Cloud Basics',        subject:'DevOps'   },
-];
+
+const TOPIC_ICONS = { 'AI / ML':'🤖', 'Web3':'⛓️', 'Python':'🐍', 'DSA':'🌳', 'Physics':'⚛️', 'React':'⚛️', 'Frontend':'🎨', 'Backend':'🏗️', 'ML / AI':'🤖', 'CS Basics':'💻', 'Maths':'📐', 'DevOps':'🐳', 'General':'📚' };
 
 function getRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-// ── Next Session Countdown ────────────────────────────────────────────────────
+// ── Next Session Countdown reads from real context ─────────────────────────────────
 function NextSessionTimer() {
   const { viewMode } = useTimetable();
+  const { sessions } = useUserSessions();
   const [countdown, setCountdown] = useState('');
   const [nextSession, setNextSession] = useState(null);
 
@@ -47,10 +38,9 @@ function NextSessionTimer() {
       const now = new Date();
       const todayDay = DAY_MAP[now.getDay()];
       const h = now.getHours() + now.getMinutes() / 60;
-      const relevant = MOCK_SESSIONS.filter(s => s.role === viewMode);
-      const todays = relevant.filter(s => s.day === todayDay && s.startHour > h);
-      if (todays.length > 0) {
-        const next = todays.reduce((a,b) => a.startHour < b.startHour ? a : b);
+      const relevant = sessions.filter(s => s.role === viewMode && s.day === todayDay && s.startHour > h);
+      if (relevant.length > 0) {
+        const next = relevant.reduce((a,b) => a.startHour < b.startHour ? a : b);
         setNextSession(next);
         const diffMins = Math.round((next.startHour - h) * 60);
         const hr = Math.floor(diffMins / 60);
@@ -58,19 +48,17 @@ function NextSessionTimer() {
         setCountdown(hr > 0 ? `${hr}h ${mn}m` : `${mn}m`);
       } else {
         setNextSession(null);
-        setCountdown('No more sessions today');
+        setCountdown(sessions.length === 0 ? 'No sessions yet' : 'None today');
       }
     }
     compute();
     const id = setInterval(compute, 30000);
     return () => clearInterval(id);
-  }, [viewMode]);
+  }, [viewMode, sessions]);
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.2 }}
+      initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
       className="w-full rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 flex items-center justify-between gap-4"
       style={{ boxShadow: '0 0 30px rgba(255,202,58,0.08)' }}
     >
@@ -80,19 +68,14 @@ function NextSessionTimer() {
         </div>
         <div>
           <p className="text-[10px] uppercase tracking-widest text-[#669BBC] font-bold">Next Session</p>
-          <p className="text-[#e8f4fd] font-bold text-sm">{nextSession ? nextSession.title : '—'}</p>
+          <p className="font-bold text-sm" style={{ color:'#e8f4fd' }}>{nextSession ? nextSession.title : '—'}</p>
           {nextSession && <p className="text-[10px] text-[#94a9bd]">{nextSession.subject} · {nextSession.day}</p>}
         </div>
       </div>
       <div className="text-right">
-        <motion.p
-          animate={{ opacity: [0.7, 1, 0.7] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="text-2xl font-extrabold text-[#FFCA3A]"
-        >
-          {countdown}
-        </motion.p>
-        <p className="text-[10px] text-[#94a9bd]">away</p>
+        <motion.p animate={{ opacity:[0.7,1,0.7] }} transition={{ duration:2, repeat:Infinity }}
+          className="text-2xl font-extrabold text-[#FFCA3A]">{countdown}</motion.p>
+        <p className="text-[10px] text-[#94a9bd]">{nextSession ? 'away' : ''}</p>
       </div>
     </motion.div>
   );
@@ -249,10 +232,12 @@ const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
     catch { return 'Cosmic Explorer'; }
   })();
 
+  const { sessions, publicSessions, tutorSessions, removeSession } = useUserSessions();
   const [cosmicTitle] = useState(() => getRandom(COSMIC_TITLES));
   const [aura]        = useState(() => getRandom(AURA_COLORS));
   const [showOrbits, setShowOrbits] = useState(false);
-  const [roomCode, setRoomCode] = useState('');
+  const [roomCode, setRoomCode]     = useState('');
+  const [launcherOpen, setLauncherOpen] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('peertutor_user');
@@ -360,7 +345,34 @@ const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
           </div>
         </motion.div>
 
-        {/* ── SECTION 2: Next Session Countdown ── */}
+        {/* ── SECTION 2: Live Stats Bar ── */}
+        <motion.section
+          initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.15 }}
+          className="w-full grid grid-cols-3 gap-3"
+        >
+          {[
+            { icon: <CalendarDays size={18}/>, label:'Sessions', value: sessions.length, color:'#FFCA3A' },
+            { icon: <TrendingUp size={18}/>,   label:'Teaching',  value: tutorSessions.length, color:'#669BBC' },
+            { icon: <Globe size={18}/>,         label:'Public',    value: publicSessions.length, color:'#34d399' },
+          ].map(({ icon, label, value, color }) => (
+            <motion.div
+              key={label}
+              whileHover={{ scale:1.04, y:-2 }}
+              className="rounded-2xl p-4 flex flex-col items-center gap-1 backdrop-blur-xl"
+              style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.8)', border:`1px solid ${color}30`, boxShadow:`0 0 20px ${color}11` }}
+            >
+              <div style={{ color }}>{icon}</div>
+              <motion.p
+                key={value}
+                initial={{ scale:1.3, opacity:0 }} animate={{ scale:1, opacity:1 }}
+                className="text-2xl font-extrabold" style={{ color }}
+              >{value}</motion.p>
+              <p className="text-[10px] uppercase tracking-widest" style={{ color: isDark ? '#94a9bd':'#4a6680' }}>{label}</p>
+            </motion.div>
+          ))}
+        </motion.section>
+
+        {/* ── SECTION 3: Next Session Countdown ── */}
         <section id="next-session-countdown" className="w-full">
           <div className="text-center mb-4">
             <h2 className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: T.label }}>Next Session Countdown</h2>
@@ -369,7 +381,7 @@ const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
           <NextSessionTimer />
         </section>
 
-        {/* ── SECTION 3: Interactive Schedule Orbit ── */}
+        {/* ── SECTION 4: Schedule Orbit ── */}
         <section id="schedule-orbit-section" className="w-full flex flex-col gap-5">
           <div className="text-center">
             <h2 className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: T.label }}>Academic Schedule Orbit</h2>
@@ -379,24 +391,88 @@ const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
           {/* View toggle row */}
           <ViewToggle />
 
-          {/* The timetable grid */}
-          <ScheduleOrbit />
+          {/* The timetable grid — onAddSession opens the launcher */}
+          <ScheduleOrbit onAddSession={() => setLauncherOpen(true)} />
         </section>
 
-        {/* ── SECTION 4: Session Command Center ── */}
+        {/* ── SECTION 5: My Sessions ── */}
+        <section id="my-sessions-section" className="w-full flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: T.label }}>My Sessions</h2>
+              <div className="w-16 h-px bg-gradient-to-r from-transparent via-[#FFCA3A]/50 to-transparent" />
+            </div>
+            <motion.button
+              whileHover={{ scale:1.05 }} whileTap={{ scale:0.96 }}
+              onClick={() => setLauncherOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold"
+              style={{ background:'rgba(255,202,58,0.15)', color:'#FFCA3A', border:'1px solid rgba(255,202,58,0.3)' }}
+            >
+              + Schedule New
+            </motion.button>
+          </div>
+
+          <div className="my-sessions-panel">
+            {sessions.length === 0 ? (
+              <div className="my-sessions-empty">
+                🌌 No sessions yet. Launch your first session!
+              </div>
+            ) : (
+              sessions.map((s, i) => {
+                const color = s.isPublic ? '#34d399' : '#669BBC';
+                const roleColor = s.role === 'tutor' ? '#FFCA3A' : '#669BBC';
+                return (
+                  <motion.div
+                    key={s.id}
+                    initial={{ opacity:0, x:-20 }} animate={{ opacity:1, x:0 }}
+                    transition={{ delay: i * 0.04 }}
+                    className="my-session-row"
+                  >
+                    <div className="my-session-dot" style={{ background: roleColor }} />
+                    <div className="my-session-info">
+                      <p className="my-session-title" style={{ color: T.text }}>{s.title}</p>
+                      <p className="my-session-meta">
+                        {s.day} · {s.startHour}:00 – {s.endHour}:00 · {s.subject}
+                        {s.tags?.length > 0 && ' · ' + s.tags.slice(0,2).map(t=>`#${t}`).join(' ')}
+                      </p>
+                    </div>
+                    <span className="my-session-badge" style={{
+                      background: s.isPublic ? 'rgba(52,211,153,0.15)' : 'rgba(102,155,188,0.15)',
+                      color, border:`1px solid ${color}44`
+                    }}>
+                      {s.isPublic ? '🌐 Public' : '🔒 Private'}
+                    </span>
+                    <motion.button
+                      whileHover={{ scale:1.1 }} whileTap={{ scale:0.9 }}
+                      className="my-session-delete"
+                      onClick={() => {
+                        if (window.confirm(`Delete "${s.title}"?`)) removeSession(s.id);
+                      }}
+                      title="Delete session"
+                    >
+                      <Trash2 size={13} />
+                    </motion.button>
+                  </motion.div>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+        {/* ── SECTION 6: Session Command Center ── */}
         <section id="session-command-center" className="w-full flex flex-col items-center gap-8">
           <div className="text-center mb-2">
             <h2 className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: T.label }}>Session Command Center</h2>
             <div className="w-16 h-px mx-auto bg-gradient-to-r from-transparent via-[#FFCA3A]/50 to-transparent" />
           </div>
 
-          {/* Primary CTA */}
+          {/* Primary CTA — opens SessionLauncher modal */}
           <motion.button
             id="start-session-btn"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.97 }}
             className="relative group"
-            onClick={() => alert('TODO: Create Firebase session')}
+            onClick={() => setLauncherOpen(true)}
           >
             <motion.span
               className="absolute inset-0 rounded-full"
@@ -422,7 +498,7 @@ const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
                   {showOrbits ? 'Collapse ▲' : 'Expand ▼'}
                 </button>
               </div>
-              <p className="text-xs mb-4" style={{ color: T.sub }}>Join an active learning orbit and collaborate with peers in real-time.</p>
+              <p className="text-xs mb-4" style={{ color: T.sub }}>Join an active public session created by peers in the cosmos.</p>
               <AnimatePresence>
                 {showOrbits && (
                   <motion.div
@@ -431,9 +507,41 @@ const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
                     exit={{ opacity: 0, height: 0 }}
                     className="overflow-hidden"
                   >
-                    <div className="grid grid-cols-2 gap-3 pt-1">
-                      {PUBLIC_SESSIONS.map((s, i) => <OrbitCard key={s.id} session={s} delay={i * 0.06} />)}
-                    </div>
+                    {publicSessions.length === 0 ? (
+                      <p className="text-xs text-center py-4" style={{ color: T.sub }}>No public sessions yet. Launch one above! 🚀</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        {publicSessions.map((s, i) => (
+                          <motion.div
+                            key={s.id}
+                            initial={{ opacity:0, scale:0.9 }} animate={{ opacity:1, scale:1 }}
+                            transition={{ delay: i * 0.06 }}
+                            whileHover={{ scale:1.04, boxShadow:'0 0 24px rgba(255,202,58,0.18)' }}
+                            className="relative group cursor-pointer rounded-xl border border-white/10 p-4 backdrop-blur-sm hover:border-[#FFCA3A]/40 transition-all"
+                            style={{ background: T.card }}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <span className="text-2xl">{TOPIC_ICONS[s.subject] || '📚'}</span>
+                              <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: T.label }}>
+                                <Users size={11}/> {s.peer || '0'}
+                              </span>
+                            </div>
+                            <p className="font-bold text-sm leading-snug" style={{ color: T.text }}>{s.title}</p>
+                            <p className="text-xs mt-0.5" style={{ color: T.sub }}>{s.subject}</p>
+                            {s.tags?.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {s.tags.slice(0,2).map(t => (
+                                  <span key={t} className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#FFCA3A]/15 text-[#FFCA3A] font-bold">#{t}</span>
+                                ))}
+                              </div>
+                            )}
+                            <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <ArrowRight size={13} className="text-[#FFCA3A]" />
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -501,6 +609,13 @@ const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
 
       {/* Floating Export Button */}
       <ExportButton />
+
+      {/* Session Launcher Modal */}
+      <SessionLauncher
+        isOpen={launcherOpen}
+        onClose={() => setLauncherOpen(false)}
+        isDark={isDark}
+      />
     </motion.div>
   );
 };

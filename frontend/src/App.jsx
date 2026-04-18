@@ -12,6 +12,7 @@ import FooterCTA from './components/FooterCTA';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
+import { UserSessionsProvider } from './context/UserSessionsContext';
 
 /**
  * App — Root component.
@@ -121,14 +122,16 @@ function App() {
   const toggleTheme = () => setIsDark((prev) => !prev);
 
   return (
-    <BrowserRouter>
-      <AnimatedRoutes
-        isDark={isDark}
-        toggleTheme={toggleTheme}
-        userName={userName}
-        setUserName={setUserName}
-      />
-    </BrowserRouter>
+    <UserSessionsProvider>
+      <BrowserRouter>
+        <AnimatedRoutes
+          isDark={isDark}
+          toggleTheme={toggleTheme}
+          userName={userName}
+          setUserName={setUserName}
+        />
+      </BrowserRouter>
+    </UserSessionsProvider>
   );
 }
 
