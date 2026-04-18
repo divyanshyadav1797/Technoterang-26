@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Mail, Lock, Eye, EyeOff, BookOpen, ArrowLeft, User } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, BookOpen, ArrowLeft, User, AlertCircle, CheckCircle } from 'lucide-react';
+import CosmosBackground from '../components/CosmosBackground';
+import FloatingParticles from '../components/FloatingParticles';
+import Magnet from '../components/react-bits/Magnet';
+
+const BACKEND = 'http://localhost:8000';
 
 // Inline brand SVG icons
 const GoogleIcon = () => (
@@ -25,13 +30,7 @@ const GithubIcon = ({ color }) => (
     <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
   </svg>
 );
-import CosmosBackground from '../components/CosmosBackground';
-import FloatingParticles from '../components/FloatingParticles';
-import Magnet from '../components/react-bits/Magnet';
 
-/**
- * Reusable glass input field — same component pattern as LoginPage.
- */
 const GlassInput = ({ id, label, type = 'text', icon: Icon, placeholder, value, onChange, rightElement }) => (
   <div className="space-y-1.5">
     <label htmlFor={id} className="text-xs font-semibold uppercase tracking-widest text-[var(--primary-color)] opacity-80">
@@ -42,13 +41,8 @@ const GlassInput = ({ id, label, type = 'text', icon: Icon, placeholder, value, 
         <Icon size={16} />
       </div>
       <input
-        id={id}
-        type={type}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className="w-full pl-10 pr-10 py-3.5 rounded-2xl bg-white/10 dark:bg-white/5 border border-white/20 dark:border-white/10 text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50 text-sm backdrop-blur-sm focus:outline-none focus:border-[var(--primary-color)]/60 focus:bg-white/20 focus:shadow-[0_0_0_3px_rgba(25,130,196,0.1)] transition-all duration-300"
-        style={{ fontFamily: 'Inter, sans-serif' }}
+        id={id} type={type} value={value} onChange={onChange} placeholder={placeholder}
+        className="w-full pl-10 pr-10 py-3.5 rounded-2xl bg-white/10 dark:bg-white/5 border border-white/20 dark:border-white/10 text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50 text-sm backdrop-blur-sm focus:outline-none focus:border-[var(--primary-color)]/60 focus:bg-white/20 transition-all duration-300"
       />
       {rightElement && (
         <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] cursor-pointer hover:text-[var(--primary-color)] transition-colors">
@@ -61,32 +55,69 @@ const GlassInput = ({ id, label, type = 'text', icon: Icon, placeholder, value, 
 
 const SocialButton = ({ icon: Icon, label }) => (
   <Magnet strength={0.3} radius={80}>
-    <motion.button
-      whileHover={{ scale: 1.05, y: -2 }}
-      whileTap={{ scale: 0.97 }}
-      className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-white/10 dark:bg-white/5 border border-white/20 hover:border-[var(--primary-color)]/40 hover:bg-white/20 transition-all duration-200 group min-w-[70px]"
-    >
-      <div className="group-hover:scale-110 transition-transform">
-        <Icon />
-      </div>
+    <motion.button whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.97 }}
+      className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-white/10 dark:bg-white/5 border border-white/20 hover:border-[var(--primary-color)]/40 hover:bg-white/20 transition-all duration-200 group min-w-[70px]">
+      <div className="group-hover:scale-110 transition-transform"><Icon /></div>
       <span className="text-[10px] font-medium text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]">{label}</span>
     </motion.button>
   </Magnet>
 );
 
 /**
- * RegisterPage — Anti-gravity frosted glass register panel.
+ * RegisterPage — calls backend POST /register and redirects to /profile on success.
  */
-const RegisterPage = ({ isDark, toggleTheme }) => {
+const RegisterPage = ({ isDark }) => {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
-  const panelVariants = {
-    hidden: { opacity: 0, y: 40, scale: 0.97 },
-    visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.7, ease: 'easeOut' } },
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (form.password !== form.confirm) {
+      setError('Passwords do not match.');
+      return;
+    }
+    if (form.password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${BACKEND}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: form.name,
+          email: form.email,
+          password: form.password,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.detail || 'Registration failed.');
+        return;
+      }
+
+      // Save user info to localStorage and navigate to profile
+      localStorage.setItem('peertutor_user', JSON.stringify(data.user));
+      localStorage.setItem('peertutor_token', data.user.uid); // store uid as token
+      navigate('/profile');
+
+    } catch (err) {
+      setError('Could not connect to the server. Make sure the backend is running on port 8000.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -94,7 +125,7 @@ const RegisterPage = ({ isDark, toggleTheme }) => {
       <CosmosBackground isDark={isDark} />
       <FloatingParticles />
 
-      {/* ── Header ── */}
+      {/* Header */}
       <header className="relative z-20 flex items-center justify-between px-8 py-5 border-b border-white/10 backdrop-blur-md bg-[var(--bg-color)]/40">
         <Link to="/" className="flex items-center gap-2.5 group">
           <div className="w-8 h-8 rounded-xl bg-[var(--primary-color)] flex items-center justify-center group-hover:rotate-12 transition-transform">
@@ -102,136 +133,80 @@ const RegisterPage = ({ isDark, toggleTheme }) => {
           </div>
           <span className="font-bold text-lg text-[var(--text-primary)]">PeerTutor</span>
         </Link>
-
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-[var(--text-secondary)]">
           {['Learn', 'Teach', 'Find Tutors'].map((item) => (
-            <Link key={item} to={`/${item.toLowerCase().replace(' ', '-')}`}
-              className="hover:text-[var(--primary-color)] transition-colors">
-              {item}
-            </Link>
+            <Link key={item} to={`/${item.toLowerCase().replace(' ', '-')}`} className="hover:text-[var(--primary-color)] transition-colors">{item}</Link>
           ))}
         </nav>
-
         <div className="flex items-center gap-3">
           <Link to="/" className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--primary-color)] transition-colors">
             <ArrowLeft size={13} /> Back to Home
           </Link>
           <Magnet strength={0.35} radius={80}>
-            <Link to="/login"
-              className="px-4 py-1.5 rounded-full border border-[var(--primary-color)]/40 text-[var(--primary-color)] text-xs font-bold hover:bg-[var(--primary-color)]/10 transition-all">
-              Login
-            </Link>
+            <Link to="/login" className="px-4 py-1.5 rounded-full border border-[var(--primary-color)]/40 text-[var(--primary-color)] text-xs font-bold hover:bg-[var(--primary-color)]/10 transition-all">Login</Link>
           </Magnet>
         </div>
       </header>
 
-      {/* ── Main ── */}
+      {/* Main */}
       <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-10">
-        <motion.div
-          variants={panelVariants}
-          initial="hidden"
-          animate="visible"
-          className="w-full max-w-md"
-          style={{ animation: 'floatReverse 8s ease-in-out infinite alternate' }}
-        >
-          {/* Glow ring — accent for register */}
+        <motion.div initial={{ opacity: 0, y: 40, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.7 }}
+          className="w-full max-w-md" style={{ animation: 'floatReverse 8s ease-in-out infinite alternate' }}>
+
           <div className="absolute -inset-1 rounded-3xl bg-gradient-to-br from-[var(--accent-color)]/20 to-[var(--primary-color)]/10 blur-xl pointer-events-none" />
 
-          {/* Glass panel */}
           <div className="relative rounded-3xl border border-white/20 dark:border-white/10 bg-[var(--bg-color)]/60 dark:bg-[#09264A]/70 backdrop-blur-2xl p-8 shadow-2xl">
-
-            {/* Title */}
             <div className="mb-8">
-              <h1 className="text-3xl font-extrabold text-[var(--text-primary)] tracking-tight mb-2">
-                Create Your Account
-              </h1>
-              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                Join our personalized learning community. Sign up today.
-              </p>
-              {/* Glowing divider — accent color for register */}
+              <h1 className="text-3xl font-extrabold text-[var(--text-primary)] tracking-tight mb-2">Create Your Account</h1>
+              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">Join our personalized learning community. Sign up today.</p>
               <div className="mt-4 h-px bg-gradient-to-r from-[var(--accent-color)]/60 via-[var(--primary-color)]/30 to-transparent" />
             </div>
 
-            {/* Form */}
-            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-              <GlassInput
-                id="reg-name"
-                label="Full Name"
-                type="text"
-                icon={User}
-                placeholder="Jane Doe"
-                value={form.name}
-                onChange={set('name')}
-              />
-              <GlassInput
-                id="reg-email"
-                label="Email Address"
-                type="email"
-                icon={Mail}
-                placeholder="you@example.com"
-                value={form.email}
-                onChange={set('email')}
-              />
-              <GlassInput
-                id="reg-password"
-                label="Password"
-                type={showPassword ? 'text' : 'password'}
-                icon={Lock}
-                placeholder="Create a strong password"
-                value={form.password}
-                onChange={set('password')}
-                rightElement={
-                  <span onClick={() => setShowPassword(!showPassword)}>
-                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </span>
-                }
-              />
-              <GlassInput
-                id="reg-confirm"
-                label="Confirm Password"
-                type={showConfirm ? 'text' : 'password'}
-                icon={Lock}
-                placeholder="Repeat your password"
-                value={form.confirm}
-                onChange={set('confirm')}
-                rightElement={
-                  <span onClick={() => setShowConfirm(!showConfirm)}>
-                    {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </span>
-                }
-              />
+            {/* Error Banner */}
+            {error && (
+              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+                className="mb-4 flex items-center gap-2 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                <AlertCircle size={15} /> {error}
+              </motion.div>
+            )}
 
-              <Magnet strength={0.3} radius={100}>
-                <motion.button
-                  type="submit"
-                  whileHover={{ scale: 1.02, boxShadow: '0 8px 30px rgba(255,166,48,0.4)' }}
-                  whileTap={{ scale: 0.98 }}
-                  className="w-full py-4 rounded-2xl bg-[var(--accent-color)] text-white font-bold text-base tracking-wide shadow-xl hover:brightness-110 transition-all mt-2"
-                >
-                  Register
-                </motion.button>
-              </Magnet>
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <GlassInput id="reg-name" label="Full Name" icon={User} placeholder="Jane Doe" value={form.name} onChange={set('name')} />
+              <GlassInput id="reg-email" label="Email Address" type="email" icon={Mail} placeholder="you@example.com" value={form.email} onChange={set('email')} />
+              <GlassInput id="reg-password" label="Password" type={showPassword ? 'text' : 'password'} icon={Lock}
+                placeholder="Min 6 characters" value={form.password} onChange={set('password')}
+                rightElement={<span onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={15} /> : <Eye size={15} />}</span>} />
+              <GlassInput id="reg-confirm" label="Confirm Password" type={showConfirm ? 'text' : 'password'} icon={Lock}
+                placeholder="Repeat your password" value={form.confirm} onChange={set('confirm')}
+                rightElement={<span onClick={() => setShowConfirm(!showConfirm)}>{showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}</span>} />
+
+              <motion.button
+                type="submit"
+                disabled={loading}
+                whileHover={!loading ? { scale: 1.02, boxShadow: '0 8px 30px rgba(255,166,48,0.4)' } : {}}
+                whileTap={!loading ? { scale: 0.98 } : {}}
+                className="w-full py-4 rounded-2xl bg-[var(--accent-color)] text-white font-bold text-base tracking-wide shadow-xl hover:brightness-110 transition-all mt-2 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Creating account...</>
+                ) : 'Register'}
+              </motion.button>
             </form>
 
-            {/* Divider */}
             <div className="my-6 flex items-center gap-3">
               <div className="flex-1 h-px bg-white/10" />
               <span className="text-xs text-[var(--text-secondary)] font-medium">or sign up with</span>
               <div className="flex-1 h-px bg-white/10" />
             </div>
-
-            {/* Social register */}
             <div className="flex justify-center gap-3">
               <SocialButton icon={GoogleIcon} label="Google" />
               <SocialButton icon={MicrosoftIcon} label="Microsoft" />
               <SocialButton icon={() => <GithubIcon color={isDark ? '#fff' : '#24292e'} />} label="GitHub" />
             </div>
 
-            {/* Cross-link back to Login */}
             <p className="mt-6 text-center text-sm text-[var(--text-secondary)]">
               Already have an account?{' '}
-              <Link to="/login"
-                className="font-bold text-[var(--primary-color)] hover:text-[var(--accent-color)] transition-colors relative group">
+              <Link to="/login" className="font-bold text-[var(--primary-color)] hover:text-[var(--accent-color)] transition-colors relative group">
                 Login
                 <span className="absolute -bottom-0.5 left-0 w-0 group-hover:w-full h-px bg-gradient-to-r from-[var(--primary-color)] to-[var(--accent-color)] transition-all duration-300" />
               </Link>
@@ -240,22 +215,14 @@ const RegisterPage = ({ isDark, toggleTheme }) => {
         </motion.div>
       </main>
 
-      {/* Footer */}
       <footer className="relative z-10 py-4 text-center text-xs text-[var(--text-secondary)]/60 border-t border-white/5">
         © 2026 PeerTutor &nbsp;·&nbsp;
         <Link to="/privacy" className="hover:text-[var(--primary-color)] transition-colors">Privacy</Link>
-        &nbsp;|&nbsp;
-        <Link to="/terms" className="hover:text-[var(--primary-color)] transition-colors">Terms</Link>
-        &nbsp;|&nbsp;
-        <Link to="/contact" className="hover:text-[var(--primary-color)] transition-colors">Contact</Link>
+        &nbsp;|&nbsp;<Link to="/terms" className="hover:text-[var(--primary-color)] transition-colors">Terms</Link>
+        &nbsp;|&nbsp;<Link to="/contact" className="hover:text-[var(--primary-color)] transition-colors">Contact</Link>
       </footer>
 
-      <style>{`
-        @keyframes floatReverse {
-          0%   { transform: translateY(-16px); }
-          100% { transform: translateY(0px); }
-        }
-      `}</style>
+      <style>{`@keyframes floatReverse { 0% { transform: translateY(-16px); } 100% { transform: translateY(0px); } }`}</style>
     </div>
   );
 };

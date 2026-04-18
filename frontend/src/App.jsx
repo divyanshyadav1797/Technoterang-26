@@ -10,6 +10,7 @@ import AISection from './components/AISection';
 import FooterCTA from './components/FooterCTA';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ProfilePage from './pages/ProfilePage';
 
 /**
  * App — Root component.
@@ -68,6 +69,7 @@ function App() {
         {/* Auth pages — full-screen standalone layouts */}
         <Route path="/login"    element={<LoginPage    isDark={isDark} toggleTheme={toggleTheme} />} />
         <Route path="/register" element={<RegisterPage isDark={isDark} toggleTheme={toggleTheme} />} />
+        <Route path="/profile"  element={<ProfilePage  isDark={isDark} />} />
       </Routes>
     </BrowserRouter>
   );
