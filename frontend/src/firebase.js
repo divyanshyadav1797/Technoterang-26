@@ -10,8 +10,9 @@
 //  4. Scroll to "Your apps" → click your Web app (</> icon)
 //  5. Copy the firebaseConfig object values below
 // ─────────────────────────────────────────────────────────
-import { initializeApp } from 'firebase/app';
+import { initializeApp }  from 'firebase/app';
 import { getAuth }        from 'firebase/auth';
+import { getFirestore }   from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey:            "AIzaSyA-qj5l2IrGrdf2-XeRhS82SMwzXQSHpF0",
@@ -24,3 +25,4 @@ const firebaseConfig = {
 
 const app  = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const db   = getFirestore(app);   // ← Firestore client

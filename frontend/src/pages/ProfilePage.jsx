@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, LogOut, Zap, Radio, Globe, Lock, ArrowRight, Users, Star, Cpu, Download, Settings2, Sun, Moon, TrendingUp, Clock, CalendarDays, Trash2 } from 'lucide-react';
+import { BookOpen, LogOut, Zap, Radio, Globe, Lock, ArrowRight, Users, Star, Cpu, Download, Settings2, Sun, Moon, TrendingUp, Clock, CalendarDays, Trash2, X } from 'lucide-react';
 import CosmosBackground from '../components/CosmosBackground';
 import FloatingParticles from '../components/FloatingParticles';
 import ScheduleOrbit from '../components/ScheduleOrbit';
@@ -224,6 +224,50 @@ const OrbitCard = ({ session, delay }) => (
   </motion.div>
 );
 
+// ── Private Key Gate ─────────────────────────────────────────────────────────
+function PrivateKeyGate({ session, onClose, navigate }) {
+  const [key, setKey]       = useState('');
+  const [error, setError]   = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function verify(e) {
+    e.preventDefault();
+    if (!key.trim()) return;
+    setLoading(true); setError('');
+    try {
+      const res = await fetch('http://localhost:8000/verify-key', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: session.id, access_code: key.trim() }),
+      });
+      if (res.ok) { onClose(); navigate(`/session/${session.id}`); }
+      else { const d = await res.json(); setError(d.detail || 'Invalid key.'); }
+    } catch { setError('Could not reach server. Try again.'); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="w-full max-w-sm rounded-3xl p-8 backdrop-blur-2xl border border-white/15 flex flex-col gap-4"
+      style={{ background: 'rgba(9,38,74,0.97)', boxShadow: '0 32px 80px rgba(0,0,0,0.6)' }}>
+      <div className="flex items-center justify-between">
+        <h3 className="font-extrabold text-[#e8f4fd] text-lg">🔒 Private Session</h3>
+        <button onClick={onClose} className="text-[#94a9bd] hover:text-white"><X size={18}/></button>
+      </div>
+      <p className="text-sm text-[#94a9bd]">{session.title}</p>
+      <form onSubmit={verify} className="flex flex-col gap-3">
+        <input value={key} onChange={e => setKey(e.target.value.toUpperCase())}
+          placeholder="Enter access code…"
+          className="px-4 py-3 rounded-xl bg-white/8 border border-white/15 text-[#e8f4fd] font-mono tracking-widest text-sm focus:outline-none focus:border-[#FFCA3A]/60"
+          maxLength={12} autoFocus />
+        {error && <p className="text-xs text-red-400">{error}</p>}
+        <button type="submit" disabled={loading}
+          className="py-3 rounded-xl bg-[#FFCA3A] text-[#09264A] font-extrabold text-sm hover:bg-[#ffd84d] transition-all disabled:opacity-60">
+          {loading ? 'Verifying…' : 'Enter Orbit →'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 // ── Main ProfilePage ──────────────────────────────────────────────────────────
 const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
   const navigate = useNavigate();
@@ -232,12 +276,19 @@ const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
     catch { return 'Cosmic Explorer'; }
   })();
 
-  const { sessions, publicSessions, tutorSessions, removeSession } = useUserSessions();
+  const { sessions, publicSessions, tutorSessions, removeSession, globalPublicSessions } = useUserSessions();
+  // Merge local public sessions with global Firestore sessions (de-dup by id)
+  const allPublicSessions = React.useMemo(() => {
+    const map = new Map();
+    [...publicSessions, ...globalPublicSessions].forEach(s => map.set(s.id, s));
+    return Array.from(map.values());
+  }, [publicSessions, globalPublicSessions]);
   const [cosmicTitle] = useState(() => getRandom(COSMIC_TITLES));
   const [aura]        = useState(() => getRandom(AURA_COLORS));
   const [showOrbits, setShowOrbits] = useState(false);
   const [roomCode, setRoomCode]     = useState('');
   const [launcherOpen, setLauncherOpen] = useState(false);
+  const [keyModal, setKeyModal]     = useState(null); // { session }
 
   useEffect(() => {
     const stored = localStorage.getItem('peertutor_user');
@@ -507,37 +558,48 @@ const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
                     exit={{ opacity: 0, height: 0 }}
                     className="overflow-hidden"
                   >
-                    {publicSessions.length === 0 ? (
+                    {allPublicSessions.length === 0 ? (
                       <p className="text-xs text-center py-4" style={{ color: T.sub }}>No public sessions yet. Launch one above! 🚀</p>
                     ) : (
                       <div className="grid grid-cols-2 gap-3 pt-1">
-                        {publicSessions.map((s, i) => (
+                        {allPublicSessions.map((s, i) => (
                           <motion.div
                             key={s.id}
                             initial={{ opacity:0, scale:0.9 }} animate={{ opacity:1, scale:1 }}
                             transition={{ delay: i * 0.06 }}
                             whileHover={{ scale:1.04, boxShadow:'0 0 24px rgba(255,202,58,0.18)' }}
-                            className="relative group cursor-pointer rounded-xl border border-white/10 p-4 backdrop-blur-sm hover:border-[#FFCA3A]/40 transition-all"
+                            className="relative group cursor-pointer rounded-xl border border-white/10 p-4 backdrop-blur-sm hover:border-[#FFCA3A]/40 transition-all flex flex-col"
                             style={{ background: T.card }}
                           >
                             <div className="flex items-start justify-between mb-2">
                               <span className="text-2xl">{TOPIC_ICONS[s.subject] || '📚'}</span>
-                              <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: T.label }}>
-                                <Users size={11}/> {s.peer || '0'}
-                              </span>
+                              <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold ${
+                                s.status==='live' ? 'bg-green-500/20 text-green-400' : 'bg-[#669BBC]/20 text-[#669BBC]'
+                              }`}>{s.status === 'live' ? '● LIVE' : '◎ WAITING'}</span>
                             </div>
                             <p className="font-bold text-sm leading-snug" style={{ color: T.text }}>{s.title}</p>
-                            <p className="text-xs mt-0.5" style={{ color: T.sub }}>{s.subject}</p>
+                            <p className="text-xs mt-0.5 mb-2" style={{ color: T.sub }}>{s.subject}</p>
                             {s.tags?.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-2">
+                              <div className="flex flex-wrap gap-1 mb-2">
                                 {s.tags.slice(0,2).map(t => (
                                   <span key={t} className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#FFCA3A]/15 text-[#FFCA3A] font-bold">#{t}</span>
                                 ))}
                               </div>
                             )}
-                            <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <ArrowRight size={13} className="text-[#FFCA3A]" />
-                            </div>
+                            {s.createdByName && (
+                              <p className="text-[9px] mb-2" style={{ color: T.sub }}>by {s.createdByName}</p>
+                            )}
+                            <motion.button
+                              whileHover={{ scale:1.04 }} whileTap={{ scale:0.96 }}
+                              onClick={() => {
+                                if (s.isPublic) navigate(`/session/${s.id}`);
+                                else setKeyModal({ session: s });
+                              }}
+                              className="mt-auto w-full py-1.5 rounded-lg text-[10px] font-bold transition-all"
+                              style={{ background:'rgba(255,202,58,0.15)', color:'#FFCA3A', border:'1px solid rgba(255,202,58,0.3)' }}
+                            >
+                              Enter Orbit →
+                            </motion.button>
                           </motion.div>
                         ))}
                       </div>
@@ -569,7 +631,12 @@ const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
                   id="connect-room-btn"
                   whileHover={{ scale: 1.06 }}
                   whileTap={{ scale: 0.96 }}
-                  onClick={() => roomCode && alert(`TODO: Connect to room "${roomCode}"`)}
+                  onClick={() => {
+                    if (!roomCode) return;
+                    const found = allPublicSessions.find(s => s.accessCode === roomCode || s.id.startsWith(roomCode.toLowerCase()));
+                    if (found) setKeyModal({ session: found });
+                    else navigate(`/session/${roomCode}`);
+                  }}
                   className="px-5 py-3 rounded-xl bg-[#FFCA3A] text-[#09264A] font-bold text-sm"
                 >
                   Connect
@@ -616,6 +683,21 @@ const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
         onClose={() => setLauncherOpen(false)}
         isDark={isDark}
       />
+
+      {/* Private Key Gate Modal */}
+      <AnimatePresence>
+        {keyModal && (
+          <>
+            <motion.div key="km-bg" initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md"
+              onClick={() => setKeyModal(null)} />
+            <motion.div key="km-card" initial={{ scale:0.85, opacity:0 }} animate={{ scale:1, opacity:1 }} exit={{ scale:0.85, opacity:0 }}
+              className="fixed inset-0 z-51 flex items-center justify-center p-4">
+              <PrivateKeyGate session={keyModal.session} onClose={() => setKeyModal(null)} navigate={navigate} />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
