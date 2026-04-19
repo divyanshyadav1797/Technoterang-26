@@ -97,6 +97,8 @@ app.add_middleware(
         "https://frontend-e5cpqns3q-vinayavasthi007-5531s-projects.vercel.app",
         # Allow all Vercel preview deployments for this project
         "https://*.vercel.app",
+        # Render self-origin
+        "https://technoterang-26.onrender.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
