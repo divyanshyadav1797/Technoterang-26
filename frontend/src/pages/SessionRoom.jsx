@@ -257,6 +257,9 @@ export default function SessionRoom() {
   const [reportSent, setReportSent]     = useState(false);
   const [elapsed, setElapsed]           = useState(0);
 
+  // ── Role ref (avoids stale closure in WS handlers) ───────────────────
+  const roleRef = useRef(null);
+
   // ── Load session metadata ─────────────────────────────────────────────────
   useEffect(() => {
     getDoc(doc(db, 'sessions', sessionId)).then(d => {
@@ -280,7 +283,7 @@ export default function SessionRoom() {
     return () => clearInterval(id);
   }, []);
 
-  // ── WebRTC + Signaling ────────────────────────────────────────────────────
+  // ── WebRTC + Signaling ────────────────────────────────────────────────
   useEffect(() => {
     let destroyed = false;
 
@@ -306,20 +309,34 @@ export default function SessionRoom() {
         if (msg.type === 'role') {
           const isInitiator = msg.payload.role === 'initiator';
           setRole(msg.payload.role);
+          roleRef.current = msg.payload.role;
+
           if (msg.payload.peerCount === 2) {
+            // Both peers already in room — only initiator starts the call.
+            // Responder waits to receive the 'offer' message.
             setPeerWaiting(false);
-            initPeer(isInitiator, ws);
+            if (isInitiator) {
+              initPeer(true, ws);
+            }
           }
+          // If peerCount === 1, this peer waits; the other will trigger peer-joined
         }
 
         if (msg.type === 'peer-joined') {
+          // Only fires on the FIRST peer (initiator) when the second joins
           setPeerWaiting(false);
-          if (role === 'initiator' || peerRef.current === null) {
-            initPeer(true, ws);
-          }
+          initPeer(true, ws);
         }
 
-        if (msg.type === 'offer' || msg.type === 'answer' || msg.type === 'ice') {
+        if (msg.type === 'offer') {
+          // Responder receives SDP offer — create peer as non-initiator, then signal it
+          if (!peerRef.current) {
+            initPeer(false, ws);
+          }
+          try { peerRef.current?.signal(msg.payload); } catch (e) { console.warn('signal offer err', e); }
+        }
+
+        if (msg.type === 'answer' || msg.type === 'ice') {
           if (peerRef.current) {
             try { peerRef.current.signal(msg.payload); } catch {}
           }
@@ -328,7 +345,7 @@ export default function SessionRoom() {
         if (msg.type === 'peer-left') { setPeerLeft(true); setConnected(false); }
         if (msg.type === 'hand-raise') { setHandRaised(true); setTimeout(() => setHandRaised(false), 5000); }
         if (msg.type === 'reaction')   { addReaction(msg.payload.emoji); }
-        if (msg.type === 'complete')   { setBothComplete(p => ({ ...p, joiner: true })); }
+        if (msg.type === 'complete')   { /* peer ended the session */ }
       };
 
       ws.onerror = () => console.warn('WS error');
@@ -542,7 +559,7 @@ export default function SessionRoom() {
             {/* Remote */}
             <div className="nexus-video-frame nexus-video-equal" style={{ borderColor: T.border, background: T.card }}>
               <div className="nexus-video-label">Peer</div>
-              <video ref={remoteVideoRef} autoPlay playsInline className="nexus-video" style={{ transform:'scaleX(-1)' }} />
+              <video ref={remoteVideoRef} autoPlay playsInline className="nexus-video" />
               {!connected && (
                 <div className="nexus-video-placeholder">
                   {peerWaiting ? (

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mail, Lock, Eye, EyeOff, BookOpen, ArrowLeft, User, AlertCircle, CheckCircle } from 'lucide-react';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { auth } from '../firebase';
 import CosmosBackground from '../components/CosmosBackground';
 import FloatingParticles from '../components/FloatingParticles';
 import Magnet from '../components/react-bits/Magnet';
@@ -91,30 +93,66 @@ const RegisterPage = ({ isDark }) => {
 
     setLoading(true);
     try {
-      const res = await fetch(`${BACKEND}/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          full_name: form.name,
-          email: form.email,
-          password: form.password,
-        }),
-      });
+      // Step 1 — Create user in Firebase Auth via JS SDK
+      const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      const fbUser = userCredential.user;
 
-      const data = await res.json();
+      // Step 2 — Set display name on the Firebase profile
+      await updateProfile(fbUser, { displayName: form.name });
 
-      if (!res.ok) {
-        setError(data.detail || 'Registration failed.');
-        return;
+      // Step 3 — Get ID token to call backend
+      const idToken = await fbUser.getIdToken();
+
+      // Step 4 — Call backend /login to create Firestore profile (with fallback)
+      let profile = null;
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(`${BACKEND}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: idToken }),
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        if (res.ok) {
+          const data = await res.json();
+          profile = data.user;
+        }
+      } catch (backendErr) {
+        console.warn('Backend /login unavailable, using Firebase profile:', backendErr.message);
       }
 
-      // Save user info to localStorage and navigate to profile
-      localStorage.setItem('peertutor_user', JSON.stringify(data.user));
-      localStorage.setItem('peertutor_token', data.user.uid); // store uid as token
+      // Step 5 — Fallback profile from Firebase if backend didn't respond
+      if (!profile) {
+        profile = {
+          uid:              fbUser.uid,
+          full_name:        form.name,
+          email:            form.email,
+          role:             'student',
+          reputation_score: 0,
+          peer_credits:     0,
+        };
+      }
+
+      // Step 6 — Save and redirect
+      localStorage.setItem('peertutor_user', JSON.stringify(profile));
+      localStorage.setItem('peertutor_token', idToken);
       navigate('/profile');
 
     } catch (err) {
-      setError('Could not connect to the server. Make sure the backend is running on port 8000.');
+      const code = err.code || '';
+      if (code === 'auth/email-already-in-use') {
+        setError('An account with this email already exists. Please log in.');
+      } else if (code === 'auth/invalid-email') {
+        setError('Please enter a valid email address.');
+      } else if (code === 'auth/weak-password') {
+        setError('Password is too weak. Use at least 6 characters.');
+      } else if (code === 'auth/network-request-failed') {
+        setError('Network error. Check your internet connection.');
+      } else {
+        setError(err.message || 'Registration failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

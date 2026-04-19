@@ -48,6 +48,48 @@ export function UserSessionsProvider({ children }) {
     catch { /* quota */ }
   }, [sessions]);
 
+  // Merge helper — combines Firestore + REST results deduplicated by id
+  const mergeGlobalSessions = useCallback((firestoreDocs, restDocs) => {
+    const map = new Map();
+    [...firestoreDocs, ...restDocs].forEach(s => map.set(s.id, s));
+    const merged = Array.from(map.values())
+      .filter(s => !s.status || s.status === 'waiting' || s.status === 'live')
+      .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
+    setGlobalPublicSessions(merged);
+  }, []);
+
+  // Internal refs for merged state
+  const firestoreDocsRef = useRef([]);
+  const restDocsRef = useRef([]);
+
+  // ── REST polling fallback ─────────────────────────────────────────────────
+  // Polls GET /sessions every 5 s so sessions are visible even when the
+  // Firebase JS SDK is misconfigured (e.g. placeholder appId).
+  useEffect(() => {
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const res = await fetch(`${API_BASE}/sessions`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const docs = (data.sessions || []).map(s => ({
+          ...s,
+          createdAt: s.createdAt ?? '',
+        }));
+        restDocsRef.current = docs;
+        mergeGlobalSessions(firestoreDocsRef.current, docs);
+      } catch {
+        // Backend offline — silent
+      }
+    }
+
+    poll(); // immediate first poll
+    const id = setInterval(poll, 5000); // then every 5 s
+    return () => { cancelled = true; clearInterval(id); };
+  }, [mergeGlobalSessions]);
+
   // ── Firestore real-time listener ──────────────────────────────────────────
   useEffect(() => {
     try {
@@ -69,18 +111,16 @@ export function UserSessionsProvider({ children }) {
                 ...data,
                 createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? data.createdAt ?? '',
               };
-            })
-            // Client-side filter: only show active sessions
-            .filter(s => !s.status || s.status === 'waiting' || s.status === 'live')
-            // Client-side sort: newest first
-            .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
+            });
 
-          setGlobalPublicSessions(docs);
+          firestoreDocsRef.current = docs;
+          mergeGlobalSessions(docs, restDocsRef.current);
           setFirestoreError(null);
         },
         (err) => {
           console.warn('[UserSessionsContext] Firestore listener error:', err.message);
           setFirestoreError(err.message);
+          // REST polling continues as fallback — no need to do anything here
         }
       );
     } catch (err) {
@@ -91,7 +131,7 @@ export function UserSessionsProvider({ children }) {
     return () => {
       if (unsubRef.current) unsubRef.current();
     };
-  }, []);
+  }, [mergeGlobalSessions]);
 
   // ── CRUD helpers ──────────────────────────────────────────────────────────
 
