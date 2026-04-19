@@ -92,6 +92,11 @@ app.add_middleware(
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
+        # Vercel production deployments
+        "https://frontend-tau-seven-81.vercel.app",
+        "https://frontend-e5cpqns3q-vinayavasthi007-5531s-projects.vercel.app",
+        # Allow all Vercel preview deployments for this project
+        "https://*.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
