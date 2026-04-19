@@ -19,7 +19,7 @@ import React, {
   createContext, useState, useCallback, useEffect, useRef,
 } from 'react';
 import {
-  collection, onSnapshot, query, where, limit,
+  collection, onSnapshot, query, where, limit, doc, setDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -143,9 +143,9 @@ export function UserSessionsProvider({ children }) {
     // 1. Update local state immediately (optimistic)
     setSessions(prev => [session, ...prev]);
 
-    // 2. Write to Firestore via backend (non-blocking, best-effort)
+    // 2. Write DIRECTLY to Firestore (bypasses backend — works even when Render sleeps)
     try {
-      const payload = {
+      await setDoc(doc(db, 'sessions', session.id), {
         id:            session.id,
         title:         session.title,
         subject:       session.subject || 'General',
@@ -159,15 +159,13 @@ export function UserSessionsProvider({ children }) {
         startHour:     session.startHour ?? 9,
         endHour:       session.endHour ?? 10,
         imageUrl:      session.imageUrl || '',
-      };
-      await fetch(`${API_BASE}/sessions`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(payload),
+        status:        'waiting',
+        participants:  [uid],
+        handRaised:    false,
+        createdAt:     serverTimestamp(),
       });
     } catch (err) {
-      // Backend may be offline — local session still works
-      console.warn('[UserSessionsContext] Could not sync session to Firestore:', err.message);
+      console.warn('[UserSessionsContext] Firestore write failed:', err.message);
     }
   }, []);
 

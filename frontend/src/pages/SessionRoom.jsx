@@ -326,8 +326,8 @@ export default function SessionRoom() {
 
       // 3. Firestore signaling docs
       const callDoc      = doc(db, 'sessions', sessionId, 'rtc', 'call');
-      const callerCands  = collection(db, 'sessions', sessionId, 'rtc', 'callerCandidates');
-      const calleeCands  = collection(db, 'sessions', sessionId, 'rtc', 'calleeCandidates');
+      const callerCands  = collection(db, 'sessions', sessionId, 'callerCandidates');
+      const calleeCands  = collection(db, 'sessions', sessionId, 'calleeCandidates');
 
       const callSnap = await getDoc(callDoc);
       const isCaller = !callSnap.exists() || !callSnap.data()?.offer;
