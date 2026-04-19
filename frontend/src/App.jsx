@@ -12,6 +12,7 @@ import FooterCTA from './components/FooterCTA';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
+import SessionRoom from './pages/SessionRoom';
 import { UserSessionsProvider } from './context/UserSessionsContext';
 
 /**
@@ -80,6 +81,11 @@ function AnimatedRoutes({ isDark, toggleTheme, userName, setUserName }) {
             /* PROP DRILLING: userName flows down from App → ProfilePage */
             <ProfilePage isDark={isDark} toggleTheme={toggleTheme} userName={userName} />
           }
+        />
+        {/* Session Room — full P2P live session nexus */}
+        <Route
+          path="/session/:sessionId"
+          element={<SessionRoom />}
         />
       </Routes>
     </AnimatePresence>

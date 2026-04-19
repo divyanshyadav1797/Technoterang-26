@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Globe, Lock, Upload, Copy, Check, Zap, Tag, Clock,
@@ -152,7 +153,7 @@ function PrivacyToggle({ isPublic, onChange }) {
 }
 
 // ── Success Screen ────────────────────────────────────────────────────────────
-function SuccessScreen({ isPublic, code, onClose }) {
+function SuccessScreen({ isPublic, code, sessionId, onClose, onEnterSession }) {
   const [copied, setCopied] = useState(false);
 
   function copy() {
@@ -232,6 +233,17 @@ function SuccessScreen({ isPublic, code, onClose }) {
         </motion.div>
       )}
 
+      <motion.button
+        id="enter-session-btn"
+        onClick={onEnterSession}
+        whileHover={{ scale: 1.04, boxShadow: '0 0 30px rgba(255,202,58,0.5)' }}
+        whileTap={{ scale: 0.97 }}
+        className="w-full py-3.5 rounded-2xl bg-[#FFCA3A] text-[#09264A] font-extrabold text-sm tracking-wide flex items-center justify-center gap-2"
+        style={{ boxShadow: '0 4px 24px rgba(255,202,58,0.35)' }}
+      >
+        <Zap size={16} className="fill-[#09264A]" /> Enter Session Room
+      </motion.button>
+
       <button id="close-success-btn" onClick={onClose} className="sl-close-success-btn">
         Back to Dashboard
       </button>
@@ -242,6 +254,8 @@ function SuccessScreen({ isPublic, code, onClose }) {
 // ── Main Modal ────────────────────────────────────────────────────────────────
 export default function SessionLauncher({ isOpen, onClose, isDark = true }) {
   const { addSession } = useUserSessions();
+  const navigate = useNavigate();
+  const [createdSessionId, setCreatedSessionId] = useState('');
 
   // ── Form state ──────────────────────────────────────────────────────────────
   const [title, setTitle]             = useState('');
@@ -326,8 +340,18 @@ export default function SessionLauncher({ isOpen, onClose, isDark = true }) {
     };
 
     await new Promise(r => setTimeout(r, 900));
-    addSession(newSession);
+
+    // Get user info for Firestore sync
+    let uid = '', displayName = '';
+    try {
+      const stored = JSON.parse(localStorage.getItem('peertutor_user') || '{}');
+      uid = stored.uid || '';
+      displayName = stored.full_name || '';
+    } catch {}
+
+    addSession(newSession, { uid, displayName });
     setAccessCode(code);
+    setCreatedSessionId(newSession.id);
     setPhase('success');
   }
 
@@ -660,7 +684,12 @@ export default function SessionLauncher({ isOpen, onClose, isDark = true }) {
                     key="success"
                     isPublic={isPublic}
                     code={accessCode}
+                    sessionId={createdSessionId}
                     onClose={onClose}
+                    onEnterSession={() => {
+                      onClose();
+                      navigate(`/session/${createdSessionId}`);
+                    }}
                   />
                 )}
               </AnimatePresence>
