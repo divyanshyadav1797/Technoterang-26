@@ -77,36 +77,53 @@ const LoginPage = ({ isDark, setUserName }) => {
     setLoading(true);
 
     try {
-      // Step 1 — Sign in with Firebase JS SDK (handles password verification securely)
+      // Step 1 — Firebase JS SDK sign-in (handles password verification)
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const idToken = await userCredential.user.getIdToken();
+      const fbUser  = userCredential.user;
 
-      // Step 2 — Send ID token to backend to fetch Firestore profile
-      const res = await fetch(`${BACKEND}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_token: idToken }),
-      });
+      // Step 2 — Call backend with a 10-second timeout
+      let profile = null;
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(`${BACKEND}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: idToken }),
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.detail || 'Login failed. Please try again.');
-        return;
+        if (res.ok) {
+          const data = await res.json();
+          profile = data.user;
+        }
+      } catch (backendErr) {
+        // Backend unavailable — create a minimal profile from Firebase data
+        console.warn('Backend /login unavailable, using Firebase profile:', backendErr.message);
       }
 
-      // Step 3 — Save profile and redirect
-      localStorage.setItem('peertutor_user', JSON.stringify(data.user));
+      // Step 3 — Fallback profile from Firebase if backend didn't respond
+      if (!profile) {
+        profile = {
+          uid:              fbUser.uid,
+          full_name:        fbUser.displayName || email.split('@')[0],
+          email:            fbUser.email,
+          role:             'student',
+          reputation_score: 0,
+          peer_credits:     0,
+        };
+      }
+
+      // Step 4 — Save and redirect
+      localStorage.setItem('peertutor_user',  JSON.stringify(profile));
       localStorage.setItem('peertutor_token', idToken);
 
-      // STATE LIFTING: push the authenticated user's name up to App state
-      // so ProfileView receives it immediately as a prop (no DB re-fetch needed).
-      if (setUserName) setUserName(data.user?.full_name || email.split('@')[0]);
-
+      if (setUserName) setUserName(profile.full_name || email.split('@')[0]);
       navigate('/profile');
 
     } catch (err) {
-      // Firebase JS SDK error codes
       const code = err.code || '';
       if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
         setError('Invalid email or password. Please try again.');
@@ -114,8 +131,6 @@ const LoginPage = ({ isDark, setUserName }) => {
         setError('Too many attempts. Please wait a moment and try again.');
       } else if (code === 'auth/network-request-failed') {
         setError('Network error. Check your internet connection.');
-      } else if (err.message?.includes('fetch')) {
-        setError('Could not connect to the backend server on port 8000.');
       } else {
         setError(err.message || 'An unexpected error occurred.');
       }

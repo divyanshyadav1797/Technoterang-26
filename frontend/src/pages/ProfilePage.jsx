@@ -288,7 +288,8 @@ const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
   const [showOrbits, setShowOrbits] = useState(false);
   const [roomCode, setRoomCode]     = useState('');
   const [launcherOpen, setLauncherOpen] = useState(false);
-  const [keyModal, setKeyModal]     = useState(null); // { session }
+  const [keyModal, setKeyModal]         = useState(null); // { session }
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null); // id of session pending delete
 
   useEffect(() => {
     const stored = localStorage.getItem('peertutor_user');
@@ -493,16 +494,27 @@ const ProfilePageInner = ({ isDark, toggleTheme, userName }) => {
                     }}>
                       {s.isPublic ? '🌐 Public' : '🔒 Private'}
                     </span>
-                    <motion.button
-                      whileHover={{ scale:1.1 }} whileTap={{ scale:0.9 }}
-                      className="my-session-delete"
-                      onClick={() => {
-                        if (window.confirm(`Delete "${s.title}"?`)) removeSession(s.id);
-                      }}
-                      title="Delete session"
-                    >
-                      <Trash2 size={13} />
-                    </motion.button>
+                    {confirmDeleteId === s.id ? (
+                      <span className="flex items-center gap-1">
+                        <button
+                          onClick={() => { removeSession(s.id); setConfirmDeleteId(null); }}
+                          className="text-[10px] px-2 py-0.5 rounded-lg bg-red-500 text-white font-bold hover:bg-red-600 transition-all"
+                        >Yes, delete</button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="text-[10px] px-2 py-0.5 rounded-lg bg-white/10 text-[#94a9bd] font-bold hover:bg-white/20 transition-all"
+                        >Cancel</button>
+                      </span>
+                    ) : (
+                      <motion.button
+                        whileHover={{ scale:1.1 }} whileTap={{ scale:0.9 }}
+                        className="my-session-delete"
+                        onClick={() => setConfirmDeleteId(s.id)}
+                        title="Delete session"
+                      >
+                        <Trash2 size={13} />
+                      </motion.button>
+                    )}
                   </motion.div>
                 );
               })

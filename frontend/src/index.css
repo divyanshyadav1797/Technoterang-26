@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 
 /* Enable Tailwind dark: variant to respond to .dark class on <html> */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -1041,3 +1041,46 @@ html:not(.dark) .my-sessions-empty { color: #4a6680; }
   cursor: crosshair; touch-action: none;
   background: rgba(5,15,35,0.95);
 }
+
+/* ── Equal video grid ── */
+.nexus-video-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  width: 100%;
+}
+.nexus-video-equal {
+  aspect-ratio: 16/9;
+  position: relative; border-radius: 20px; overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 0 32px rgba(102,155,188,0.10), 0 8px 24px rgba(0,0,0,0.35);
+}
+@media (max-width: 640px) {
+  .nexus-video-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Light theme overrides ── */
+.nexus-root.nexus-light { background: #f1f5f9; }
+.nexus-root.nexus-light .nexus-bg { background: #f1f5f9; }
+.nexus-root.nexus-light .nexus-caption-bar {
+  background: linear-gradient(to top, rgba(241,245,249,0.95) 0%, transparent 100%);
+  color: #1e293b;
+}
+.nexus-root.nexus-light .nexus-chat-panel {
+  background: rgba(255,255,255,0.95);
+  border-left-color: rgba(0,0,0,0.1);
+}
+.nexus-root.nexus-light .nexus-chat-name { color: #3b82f6; }
+.nexus-root.nexus-light .nexus-chat-theirs .nexus-chat-text {
+  background: rgba(0,0,0,0.05); color: #1e293b;
+  border-color: rgba(0,0,0,0.1);
+}
+.nexus-root.nexus-light .nexus-chat-mine .nexus-chat-text { color: #1e293b; }
+.nexus-root.nexus-light .nexus-chat-input {
+  background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.12); color: #1e293b;
+}
+.nexus-root.nexus-light .nexus-wb-toolbar { background: rgba(241,245,249,0.9); }
+.nexus-root.nexus-light .nexus-whiteboard-wrap { background: #fff; border-color: rgba(0,0,0,0.12); }
+.nexus-root.nexus-light .nexus-canvas { background: #ffffff; }
+

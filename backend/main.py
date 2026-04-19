@@ -118,8 +118,9 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email:    EmailStr = Field(..., example="jane@example.com")
-    password: str      = Field(..., min_length=1, example="supersecret123")
+    # Frontend signs in via Firebase JS SDK and sends the verified ID token.
+    # Backend verifies it and returns the Firestore user profile.
+    id_token: str = Field(..., min_length=1)
 
 
 class UserProfile(BaseModel):
@@ -287,19 +288,42 @@ async def register(payload: RegisterRequest):
 )
 async def login(payload: LoginRequest):
     _require_firebase()
-    firebase_resp = firebase_sign_in(payload.email, payload.password)
-    uid      = firebase_resp["localId"]
-    id_token = firebase_resp["idToken"]
 
+    # Verify the Firebase ID token the JS SDK already issued
+    try:
+        decoded = auth.verify_id_token(payload.id_token)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid or expired token: {exc}"
+        )
+
+    uid = decoded["uid"]
+
+    # Fetch Firestore profile
     try:
         doc = db.collection("users").document(uid).get()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Firestore read failed: {exc}")
 
+    # Auto-create a profile if the user registered directly through Firebase
+    # (e.g. Google OAuth) and doesn't have a Firestore doc yet.
     if not doc.exists:
-        raise HTTPException(status_code=404, detail="User profile not found. Please register first.")
-
-    data = doc.to_dict()
+        fb_user = auth.get_user(uid)
+        new_profile = {
+            "uid":              uid,
+            "full_name":        fb_user.display_name or fb_user.email.split("@")[0],
+            "email":            fb_user.email or "",
+            "role":             "student",
+            "reputation_score": 0,
+            "peer_credits":     0,
+            "created_at":       firestore.SERVER_TIMESTAMP,
+        }
+        db.collection("users").document(uid).set(new_profile)
+        data = new_profile
+        data["created_at"] = None  # SERVER_TIMESTAMP resolves async
+    else:
+        data = doc.to_dict()
 
     created_at = None
     if data.get("created_at"):
@@ -320,7 +344,7 @@ async def login(payload: LoginRequest):
 
     return LoginResponse(
         message=f"Welcome back, {profile.full_name}!",
-        id_token=id_token,
+        id_token=payload.id_token,
         user=profile,
     )
 

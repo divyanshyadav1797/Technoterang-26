@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import SimplePeer from 'simple-peer';
 import {
   collection, addDoc, onSnapshot, query, orderBy, doc,
-  updateDoc, serverTimestamp, getDoc,
+  serverTimestamp, getDoc,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import {
@@ -400,23 +400,20 @@ export default function SessionRoom() {
   }
 
   async function handleComplete() {
-    try {
-      const storedUser = getUser();
-      await fetch(`${API_BASE}/complete-session`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: sessionId,
-          uid_host:   storedUser.uid || '',
-          uid_joiner: '',
-        }),
-      });
-    } catch {}
-    // Clean up and navigate
+    // Don't wait for backend — clean up immediately so UI responds
+    setSessionEnded(true);
+    setXpToast('+10 Reputation  +5 Peer Credits!');
     peerRef.current?.destroy();
     wsRef.current?.close();
     localStream.current?.getTracks().forEach(t => t.stop());
-    setSessionEnded(true);
-    setXpToast('+10 Reputation  +5 Peer Credits!');
+    // Fire-and-forget backend call with timeout
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 5000);
+    fetch(`${API_BASE}/complete-session`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, uid_host: getUser().uid || '', uid_joiner: '' }),
+      signal: ctrl.signal,
+    }).catch(() => {});
     setTimeout(() => navigate('/profile'), 2500);
   }
 
@@ -447,8 +444,8 @@ export default function SessionRoom() {
     : { bg:'#09264A', card:'rgba(255,255,255,0.04)', text:'#e8f4fd', sub:'#94a9bd', border:'rgba(255,255,255,0.12)', header:'rgba(9,38,74,0.7)' };
 
   return (
-    <div className="nexus-root" style={{ background: T.bg }}>
-      <div className="nexus-bg" style={lightTheme ? { background:'#f8fafc' } : undefined} />
+    <div className={`nexus-root${lightTheme ? ' nexus-light' : ''}`} style={{ background: T.bg }}>
+      <div className="nexus-bg" style={lightTheme ? { background:'#f1f5f9' } : undefined} />
 
       {/* Header */}
       <header className="nexus-header" style={{ background: T.header, borderColor: T.border }}>

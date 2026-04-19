@@ -19,8 +19,8 @@ const firebaseConfig = {
   authDomain:        "peer-2-peer-data.firebaseapp.com",
   projectId:         "peer-2-peer-data",
   storageBucket:     "peer-2-peer-data.appspot.com",
-  messagingSenderId: "",   // ← fill from Firebase Console if needed
-  appId:             "",   // ← fill from Firebase Console if needed
+  messagingSenderId: "your-messaging-sender-id",   // Firebase Console → Project Settings → General → Your apps
+  appId:             "your-app-id",                // Firebase Console → Project Settings → General → Your apps
 };
 
 const app  = initializeApp(firebaseConfig);
