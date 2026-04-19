@@ -2,10 +2,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import SimplePeer from 'simple-peer';
 import {
   collection, addDoc, onSnapshot, query, orderBy, doc,
-  serverTimestamp, getDoc,
+  serverTimestamp, getDoc, setDoc, updateDoc, deleteDoc,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import {
@@ -14,7 +13,17 @@ import {
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
-const WS_BASE  = import.meta.env.VITE_WS_BASE  || 'ws://localhost:8000';
+
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+  ],
+};
 
 const REACTIONS = ['🔥','👏','💡','🚀','⭐','🎉'];
 
@@ -231,8 +240,7 @@ export default function SessionRoom() {
   const localVideoRef  = useRef(null);
   const remoteVideoRef = useRef(null);
   const localStream    = useRef(null);
-  const peerRef        = useRef(null);
-  const wsRef          = useRef(null);
+  const pcRef          = useRef(null);
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [sessionData, setSessionData]     = useState(null);
@@ -257,8 +265,6 @@ export default function SessionRoom() {
   const [reportSent, setReportSent]     = useState(false);
   const [elapsed, setElapsed]           = useState(0);
 
-  // ── Role ref (avoids stale closure in WS handlers) ───────────────────
-  const roleRef = useRef(null);
 
   // ── Load session metadata ─────────────────────────────────────────────────
   useEffect(() => {
@@ -283,111 +289,130 @@ export default function SessionRoom() {
     return () => clearInterval(id);
   }, []);
 
-  // ── WebRTC + Signaling ────────────────────────────────────────────────
+  // ── WebRTC via Firestore Signaling ────────────────────────────────────────
   useEffect(() => {
     let destroyed = false;
+    const unsubs = [];
 
     async function start() {
-      // Get local media
+      // 1. Get local media
       try {
         localStream.current = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = localStream.current;
-        }
+        if (localVideoRef.current) localVideoRef.current.srcObject = localStream.current;
       } catch (err) {
         console.warn('Camera/mic not available:', err.message);
       }
 
-      // Connect to signaling server
-      const ws = new WebSocket(`${WS_BASE}/ws/signal/${sessionId}`);
-      wsRef.current = ws;
+      if (destroyed) return;
 
-      ws.onmessage = (evt) => {
-        if (destroyed) return;
-        const msg = JSON.parse(evt.data);
+      // 2. Create RTCPeerConnection
+      const pc = new RTCPeerConnection(ICE_SERVERS);
+      pcRef.current = pc;
 
-        if (msg.type === 'role') {
-          const isInitiator = msg.payload.role === 'initiator';
-          setRole(msg.payload.role);
-          roleRef.current = msg.payload.role;
+      if (localStream.current) {
+        localStream.current.getTracks().forEach(t => pc.addTrack(t, localStream.current));
+      }
 
-          if (msg.payload.peerCount === 2) {
-            // Both peers already in room — only initiator starts the call.
-            // Responder waits to receive the 'offer' message.
-            setPeerWaiting(false);
-            if (isInitiator) {
-              initPeer(true, ws);
-            }
-          }
-          // If peerCount === 1, this peer waits; the other will trigger peer-joined
+      pc.ontrack = (e) => {
+        if (remoteVideoRef.current && e.streams[0]) {
+          remoteVideoRef.current.srcObject = e.streams[0];
+          setConnected(true);
         }
-
-        if (msg.type === 'peer-joined') {
-          // Only fires on the FIRST peer (initiator) when the second joins
-          setPeerWaiting(false);
-          initPeer(true, ws);
-        }
-
-        if (msg.type === 'offer') {
-          // Responder receives SDP offer — create peer as non-initiator, then signal it
-          if (!peerRef.current) {
-            initPeer(false, ws);
-          }
-          try { peerRef.current?.signal(msg.payload); } catch (e) { console.warn('signal offer err', e); }
-        }
-
-        if (msg.type === 'answer' || msg.type === 'ice') {
-          if (peerRef.current) {
-            try { peerRef.current.signal(msg.payload); } catch {}
-          }
-        }
-
-        if (msg.type === 'peer-left') { setPeerLeft(true); setConnected(false); }
-        if (msg.type === 'hand-raise') { setHandRaised(true); setTimeout(() => setHandRaised(false), 5000); }
-        if (msg.type === 'reaction')   { addReaction(msg.payload.emoji); }
-        if (msg.type === 'complete')   { /* peer ended the session */ }
       };
 
-      ws.onerror = () => console.warn('WS error');
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') setConnected(false);
+      };
+
+      // 3. Firestore signaling docs
+      const callDoc      = doc(db, 'sessions', sessionId, 'rtc', 'call');
+      const callerCands  = collection(db, 'sessions', sessionId, 'rtc', 'callerCandidates');
+      const calleeCands  = collection(db, 'sessions', sessionId, 'rtc', 'calleeCandidates');
+
+      const callSnap = await getDoc(callDoc);
+      const isCaller = !callSnap.exists() || !callSnap.data()?.offer;
+
+      setRole(isCaller ? 'initiator' : 'responder');
+
+      if (isCaller) {
+        // ── Caller flow ──
+        pc.onicecandidate = ({ candidate }) => {
+          if (candidate) addDoc(callerCands, candidate.toJSON()).catch(() => {});
+        };
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await setDoc(callDoc, { offer: { type: offer.type, sdp: offer.sdp }, createdAt: serverTimestamp() });
+        setPeerWaiting(true);
+
+        // Listen for answer
+        unsubs.push(onSnapshot(callDoc, async (snap) => {
+          const data = snap.data();
+          if (data?.answer && !pc.currentRemoteDescription) {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.answer)).catch(console.warn);
+            setPeerWaiting(false);
+          }
+        }));
+
+        // Listen for callee ICE candidates
+        unsubs.push(onSnapshot(calleeCands, (snap) => {
+          snap.docChanges().forEach(async (ch) => {
+            if (ch.type === 'added') {
+              await pc.addIceCandidate(new RTCIceCandidate(ch.doc.data())).catch(console.warn);
+            }
+          });
+        }));
+
+      } else {
+        // ── Callee flow ──
+        pc.onicecandidate = ({ candidate }) => {
+          if (candidate) addDoc(calleeCands, candidate.toJSON()).catch(() => {});
+        };
+
+        const offerData = callSnap.data().offer;
+        await pc.setRemoteDescription(new RTCSessionDescription(offerData));
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        await updateDoc(callDoc, { answer: { type: answer.type, sdp: answer.sdp } });
+        setPeerWaiting(false);
+
+        // Listen for caller ICE candidates
+        unsubs.push(onSnapshot(callerCands, (snap) => {
+          snap.docChanges().forEach(async (ch) => {
+            if (ch.type === 'added') {
+              await pc.addIceCandidate(new RTCIceCandidate(ch.doc.data())).catch(console.warn);
+            }
+          });
+        }));
+      }
+
+      // 4. Listen for Firestore events (hand-raise, reactions, peer-left)
+      const eventsRef = collection(db, 'sessions', sessionId, 'events');
+      const eventsQ   = query(eventsRef, orderBy('timestamp', 'asc'));
+      const myUid = getUser().uid || 'anon';
+      unsubs.push(onSnapshot(eventsQ, (snap) => {
+        snap.docChanges().forEach((ch) => {
+          if (ch.type !== 'added') return;
+          const d = ch.doc.data();
+          if (d.uid === myUid) return; // ignore own events
+          if (d.type === 'hand-raise') { setHandRaised(true); setTimeout(() => setHandRaised(false), 5000); }
+          if (d.type === 'reaction')   { addReaction(d.emoji); }
+          if (d.type === 'peer-left')  { setPeerLeft(true); setConnected(false); }
+        });
+      }));
     }
 
     start();
 
     return () => {
       destroyed = true;
-      peerRef.current?.destroy();
-      wsRef.current?.close();
+      pcRef.current?.close();
       localStream.current?.getTracks().forEach(t => t.stop());
+      unsubs.forEach(u => u());
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
-
-  function initPeer(initiator, ws) {
-    if (peerRef.current) return;
-
-    const peer = new SimplePeer({
-      initiator,
-      trickle:  true,
-      stream:   localStream.current || undefined,
-    });
-
-    peer.on('signal', data => {
-      const type = data.type === 'offer' ? 'offer' : data.type === 'answer' ? 'answer' : 'ice';
-      ws.send(JSON.stringify({ type, payload: data }));
-    });
-
-    peer.on('stream', remoteStream => {
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remoteStream;
-      }
-      setConnected(true);
-    });
-
-    peer.on('error', err => console.warn('Peer error:', err.message));
-    peer.on('close', () => setConnected(false));
-
-    peerRef.current = peer;
-  }
 
   // ── Controls ──────────────────────────────────────────────────────────────
   function toggleMute() {
@@ -401,7 +426,10 @@ export default function SessionRoom() {
   }
 
   function raiseHand() {
-    wsRef.current?.send(JSON.stringify({ type: 'hand-raise', payload: {} }));
+    const myUid = getUser().uid || 'anon';
+    addDoc(collection(db, 'sessions', sessionId, 'events'), {
+      type: 'hand-raise', uid: myUid, timestamp: serverTimestamp(),
+    }).catch(() => {});
     setHandRaised(true);
     setTimeout(() => setHandRaised(false), 5000);
   }
@@ -413,30 +441,37 @@ export default function SessionRoom() {
 
   function sendReaction(emoji) {
     addReaction(emoji);
-    wsRef.current?.send(JSON.stringify({ type: 'reaction', payload: { emoji } }));
+    const myUid = getUser().uid || 'anon';
+    addDoc(collection(db, 'sessions', sessionId, 'events'), {
+      type: 'reaction', emoji, uid: myUid, timestamp: serverTimestamp(),
+    }).catch(() => {});
   }
 
   async function handleComplete() {
-    // Don't wait for backend — clean up immediately so UI responds
     setSessionEnded(true);
     setXpToast('+10 Reputation  +5 Peer Credits!');
-    peerRef.current?.destroy();
-    wsRef.current?.close();
+    const myUid = getUser().uid || 'anon';
+    addDoc(collection(db, 'sessions', sessionId, 'events'), {
+      type: 'peer-left', uid: myUid, timestamp: serverTimestamp(),
+    }).catch(() => {});
+    pcRef.current?.close();
     localStream.current?.getTracks().forEach(t => t.stop());
-    // Fire-and-forget backend call with timeout
     const ctrl = new AbortController();
     setTimeout(() => ctrl.abort(), 5000);
     fetch(`${API_BASE}/complete-session`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, uid_host: getUser().uid || '', uid_joiner: '' }),
+      body: JSON.stringify({ session_id: sessionId, uid_host: myUid, uid_joiner: '' }),
       signal: ctrl.signal,
     }).catch(() => {});
     setTimeout(() => navigate('/profile'), 2500);
   }
 
   function handleLeave() {
-    peerRef.current?.destroy();
-    wsRef.current?.close();
+    const myUid = getUser().uid || 'anon';
+    addDoc(collection(db, 'sessions', sessionId, 'events'), {
+      type: 'peer-left', uid: myUid, timestamp: serverTimestamp(),
+    }).catch(() => {});
+    pcRef.current?.close();
     localStream.current?.getTracks().forEach(t => t.stop());
     navigate('/profile');
   }
