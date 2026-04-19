@@ -24,7 +24,7 @@ import {
 import { db } from '../firebase';
 
 const STORAGE_KEY = 'peertutor_sessions';
-const API_BASE    = 'http://localhost:8000';
+const API_BASE    = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
 export const UserSessionsContext = createContext(null);
 

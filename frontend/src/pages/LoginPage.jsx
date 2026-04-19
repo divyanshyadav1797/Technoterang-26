@@ -8,7 +8,7 @@ import CosmosBackground from '../components/CosmosBackground';
 import FloatingParticles from '../components/FloatingParticles';
 import Magnet from '../components/react-bits/Magnet';
 
-const BACKEND = 'http://localhost:8000';
+const BACKEND = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">

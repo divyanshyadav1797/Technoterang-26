@@ -235,7 +235,7 @@ function PrivateKeyGate({ session, onClose, navigate }) {
     if (!key.trim()) return;
     setLoading(true); setError('');
     try {
-      const res = await fetch('http://localhost:8000/verify-key', {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:8000'}/verify-key`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: session.id, access_code: key.trim() }),
       });
