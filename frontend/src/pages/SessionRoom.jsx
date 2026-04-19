@@ -10,7 +10,7 @@ import {
 import { db } from '../firebase';
 import {
   Mic, MicOff, Video, VideoOff, Phone, MessageSquare,
-  Pen, Hand, CheckCircle, X, BookOpen,
+  Pen, Hand, CheckCircle, X, BookOpen, Flag, Sun, Moon, Key,
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000';
@@ -86,7 +86,10 @@ function Whiteboard({ sessionId }) {
   function getPos(e, canvas) {
     const r = canvas.getBoundingClientRect();
     const touch = e.touches?.[0] ?? e;
-    return { x: touch.clientX - r.left, y: touch.clientY - r.top };
+    // Scale coordinates to match internal canvas resolution
+    const scaleX = canvas.width / r.width;
+    const scaleY = canvas.height / r.height;
+    return { x: (touch.clientX - r.left) * scaleX, y: (touch.clientY - r.top) * scaleY };
   }
 
   function startDraw(e) {
@@ -243,12 +246,16 @@ export default function SessionRoom() {
   const [showBoard, setShowBoard] = useState(false);
 
   const [caption, setCaption]           = useState('');
-  const [engagement, setEngagement]     = useState(87);
   const [handRaised, setHandRaised]     = useState(false);
   const [reactions, setReactions]       = useState([]);
-  const [bothComplete, setBothComplete] = useState({ host: false, joiner: false });
   const [xpToast, setXpToast]           = useState(null);
   const [peerLeft, setPeerLeft]         = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
+  const [lightTheme, setLightTheme]     = useState(false);
+  const [showReport, setShowReport]     = useState(false);
+  const [reportText, setReportText]     = useState('');
+  const [reportSent, setReportSent]     = useState(false);
+  const [elapsed, setElapsed]           = useState(0);
 
   // ── Load session metadata ─────────────────────────────────────────────────
   useEffect(() => {
@@ -267,11 +274,9 @@ export default function SessionRoom() {
     return () => clearInterval(id);
   }, []);
 
-  // ── Engagement meter simulation ───────────────────────────────────────────
+  // ── Session timer ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const id = setInterval(() => {
-      setEngagement(prev => Math.max(20, Math.min(100, prev + (Math.random() > 0.5 ? 5 : -7))));
-    }, 4000);
+    const id = setInterval(() => setElapsed(p => p + 1), 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -395,8 +400,6 @@ export default function SessionRoom() {
   }
 
   async function handleComplete() {
-    setBothComplete(p => ({ ...p, host: true }));
-    wsRef.current?.send(JSON.stringify({ type: 'complete', payload: {} }));
     try {
       const storedUser = getUser();
       await fetch(`${API_BASE}/complete-session`, {
@@ -407,9 +410,14 @@ export default function SessionRoom() {
           uid_joiner: '',
         }),
       });
-      setXpToast('+10 Reputation • +5 Peer Credits! 🎉');
-      setTimeout(() => setXpToast(null), 5000);
     } catch {}
+    // Clean up and navigate
+    peerRef.current?.destroy();
+    wsRef.current?.close();
+    localStream.current?.getTracks().forEach(t => t.stop());
+    setSessionEnded(true);
+    setXpToast('+10 Reputation  +5 Peer Credits!');
+    setTimeout(() => navigate('/profile'), 2500);
   }
 
   function handleLeave() {
@@ -419,45 +427,72 @@ export default function SessionRoom() {
     navigate('/profile');
   }
 
-  const engagementColor = engagement > 70 ? '#34d399' : engagement > 40 ? '#FFCA3A' : '#f87171';
+  async function submitReport() {
+    if (!reportText.trim()) return;
+    try {
+      await addDoc(collection(db, 'reports'), {
+        sessionId, reportedBy: user.uid || 'anon',
+        reporterName: user.full_name || 'Anonymous',
+        reason: reportText.trim(), timestamp: serverTimestamp(),
+      });
+      setReportSent(true);
+      setTimeout(() => { setShowReport(false); setReportSent(false); setReportText(''); }, 2000);
+    } catch {}
+  }
+
+  const timerStr = `${String(Math.floor(elapsed/60)).padStart(2,'0')}:${String(elapsed%60).padStart(2,'0')}`;
+
+  const T = lightTheme
+    ? { bg:'#f8fafc', card:'rgba(0,0,0,0.04)', text:'#1e293b', sub:'#64748b', border:'rgba(0,0,0,0.1)', header:'rgba(248,250,252,0.85)' }
+    : { bg:'#09264A', card:'rgba(255,255,255,0.04)', text:'#e8f4fd', sub:'#94a9bd', border:'rgba(255,255,255,0.12)', header:'rgba(9,38,74,0.7)' };
 
   return (
-    <div className="nexus-root">
-      {/* ── Cosmos Background ─────────────────────────────────────────────── */}
-      <div className="nexus-bg" />
+    <div className="nexus-root" style={{ background: T.bg }}>
+      <div className="nexus-bg" style={lightTheme ? { background:'#f8fafc' } : undefined} />
 
-      {/* ── Header ────────────────────────────────────────────────────────── */}
-      <header className="nexus-header">
+      {/* Header */}
+      <header className="nexus-header" style={{ background: T.header, borderColor: T.border }}>
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-[#FFCA3A] flex items-center justify-center">
             <BookOpen size={16} className="text-[#09264A]" />
           </div>
-          <span className="font-extrabold text-[#e8f4fd] text-lg">PeerTutor</span>
-          <span className="nexus-live-badge">
-            <span className="nexus-live-dot" /> LIVE
-          </span>
+          <span className="font-extrabold text-lg" style={{ color: T.text }}>PeerTutor</span>
+          {!sessionEnded && <span className="nexus-live-badge"><span className="nexus-live-dot" /> LIVE</span>}
+          <span className="text-xs font-mono font-bold px-2 py-1 rounded-lg" style={{ background: T.card, color: T.sub, border: `1px solid ${T.border}` }}>{timerStr}</span>
         </div>
-        <div className="flex items-center gap-2 text-sm text-[#94a9bd]">
-          {sessionData?.title || 'Session Room'} · {sessionId.slice(0, 8)}…
+        <div className="flex items-center gap-2 text-sm" style={{ color: T.sub }}>
+          {sessionData?.title || 'Session Room'}
+          {sessionData?.accessCode && (
+            <span className="flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded-lg bg-[#FFCA3A]/15 text-[#FFCA3A] border border-[#FFCA3A]/30">
+              <Key size={10} /> {sessionData.accessCode}
+            </span>
+          )}
         </div>
-        <button onClick={handleLeave}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 text-sm font-semibold hover:bg-red-500/30 transition-all">
-          <Phone size={14} /> Leave
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setLightTheme(t => !t)} className="nexus-ctrl-btn w-9 h-9" style={{ borderColor: T.border, background: T.card, color: T.text }}>
+            {lightTheme ? <Moon size={14}/> : <Sun size={14}/>}
+          </button>
+          <button onClick={() => setShowReport(true)} className="nexus-ctrl-btn w-9 h-9" style={{ borderColor: T.border, background: T.card, color: '#f87171' }}>
+            <Flag size={14}/>
+          </button>
+          <button onClick={handleLeave} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 text-sm font-semibold hover:bg-red-500/30 transition-all">
+            <Phone size={14} /> Leave
+          </button>
+        </div>
       </header>
 
-      {/* ── Notifications ─────────────────────────────────────────────────── */}
+      {/* Notifications */}
       <AnimatePresence>
         {handRaised && (
           <motion.div initial={{ y:-60,opacity:0 }} animate={{ y:0,opacity:1 }} exit={{ y:-60,opacity:0 }}
             className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-2xl bg-[#FFCA3A]/20 border border-[#FFCA3A]/50 text-[#FFCA3A] font-bold text-sm backdrop-blur-xl">
-            ✋ Your peer raised their hand!
+            Your peer raised their hand!
           </motion.div>
         )}
         {peerLeft && (
           <motion.div initial={{ y:-60,opacity:0 }} animate={{ y:0,opacity:1 }}
             className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 font-bold text-sm backdrop-blur-xl">
-            ⚠️ Your peer disconnected
+            Your peer disconnected
           </motion.div>
         )}
         {xpToast && (
@@ -468,150 +503,146 @@ export default function SessionRoom() {
         )}
       </AnimatePresence>
 
-      {/* ── Main Layout ───────────────────────────────────────────────────── */}
-      <div className="nexus-main">
-
-        {/* ── Video Column ──────────────────────────────────────────────── */}
-        <div className="nexus-video-col">
-
-          {/* Tutor Video */}
-          <div className="nexus-video-frame">
-            <div className="nexus-video-label">🏫 Tutor</div>
-            <video ref={remoteVideoRef} autoPlay playsInline
-              className="nexus-video" style={{ transform:'scaleX(-1)' }} />
-            {!connected && (
-              <div className="nexus-video-placeholder">
-                {peerWaiting ? (
-                  <div className="text-center">
-                    <motion.div animate={{ scale:[1,1.15,1] }} transition={{ duration:2,repeat:Infinity }}
-                      className="w-16 h-16 rounded-full bg-[#FFCA3A]/20 border-2 border-[#FFCA3A]/50 flex items-center justify-center mx-auto mb-3">
-                      <span className="text-2xl">⏳</span>
-                    </motion.div>
-                    <p className="text-[#94a9bd] text-sm">Waiting for peer…</p>
-                  </div>
+      {/* Report Modal */}
+      <AnimatePresence>
+        {showReport && (
+          <>
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" onClick={() => setShowReport(false)} />
+            <motion.div initial={{ scale:0.85,opacity:0 }} animate={{ scale:1,opacity:1 }} exit={{ scale:0.85,opacity:0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="w-full max-w-sm rounded-2xl p-6 border flex flex-col gap-3" style={{ background: lightTheme ? '#fff' : 'rgba(9,38,74,0.97)', borderColor: T.border }}>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-extrabold" style={{ color: T.text }}>Report Session</h3>
+                  <button onClick={() => setShowReport(false)} style={{ color: T.sub }}><X size={18}/></button>
+                </div>
+                {reportSent ? (
+                  <p className="text-sm text-[#34d399] font-bold py-4 text-center">Report sent to admin. Thank you.</p>
                 ) : (
-                  <div className="text-center">
-                    <motion.div animate={{ rotate:360 }} transition={{ duration:1.5,repeat:Infinity,ease:'linear' }}
-                      className="w-10 h-10 border-2 border-[#FFCA3A] border-t-transparent rounded-full mx-auto mb-2" />
-                    <p className="text-[#94a9bd] text-xs">Connecting…</p>
-                  </div>
+                  <>
+                    <textarea value={reportText} onChange={e => setReportText(e.target.value)}
+                      placeholder="Describe the issue..." rows={4}
+                      className="w-full px-3 py-2 rounded-xl text-sm resize-none outline-none"
+                      style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text }} />
+                    <button onClick={submitReport} disabled={!reportText.trim()}
+                      className="w-full py-2.5 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 transition-all disabled:opacity-40">
+                      Submit Report
+                    </button>
+                  </>
                 )}
               </div>
-            )}
-            {/* AI Captions */}
-            <AnimatePresence mode="wait">
-              <motion.div key={caption}
-                initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }}
-                className="nexus-caption-bar">
-                🤖 {caption}
-              </motion.div>
-            </AnimatePresence>
-            {/* Floating reactions */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
-              <AnimatePresence>
-                {reactions.map(r => (
-                  <FloatingReaction key={r.id} emoji={r.emoji} id={r.id}
-                    onDone={() => setReactions(p => p.filter(x => x.id !== r.id))} />
-                ))}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Main Layout */}
+      <div className="nexus-main">
+        <div className="nexus-video-col">
+
+          {/* Equal Video Grid */}
+          <div className="nexus-video-grid">
+            {/* Remote */}
+            <div className="nexus-video-frame nexus-video-equal" style={{ borderColor: T.border, background: T.card }}>
+              <div className="nexus-video-label">Peer</div>
+              <video ref={remoteVideoRef} autoPlay playsInline className="nexus-video" style={{ transform:'scaleX(-1)' }} />
+              {!connected && (
+                <div className="nexus-video-placeholder">
+                  {peerWaiting ? (
+                    <div className="text-center">
+                      <motion.div animate={{ scale:[1,1.15,1] }} transition={{ duration:2,repeat:Infinity }}
+                        className="w-14 h-14 rounded-full bg-[#FFCA3A]/20 border-2 border-[#FFCA3A]/50 flex items-center justify-center mx-auto mb-2">
+                        <span className="text-xl">...</span>
+                      </motion.div>
+                      <p style={{ color: T.sub }} className="text-sm">Waiting for peer</p>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <motion.div animate={{ rotate:360 }} transition={{ duration:1.5,repeat:Infinity,ease:'linear' }}
+                        className="w-8 h-8 border-2 border-[#FFCA3A] border-t-transparent rounded-full mx-auto mb-2" />
+                      <p style={{ color: T.sub }} className="text-xs">Connecting...</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              <AnimatePresence mode="wait">
+                <motion.div key={caption} initial={{ opacity:0,y:8 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-8 }} className="nexus-caption-bar">
+                  {caption}
+                </motion.div>
               </AnimatePresence>
-            </div>
-          </div>
-
-          {/* Local Video */}
-          <div className="nexus-video-frame nexus-video-local">
-            <div className="nexus-video-label">🎓 You</div>
-            <video ref={localVideoRef} autoPlay playsInline muted
-              className="nexus-video" style={{ transform:'scaleX(-1)' }} />
-            {camOff && (
-              <div className="nexus-video-placeholder">
-                <VideoOff size={28} className="text-[#94a9bd]" />
+              <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                <AnimatePresence>
+                  {reactions.map(r => (
+                    <FloatingReaction key={r.id} emoji={r.emoji} id={r.id}
+                      onDone={() => setReactions(p => p.filter(x => x.id !== r.id))} />
+                  ))}
+                </AnimatePresence>
               </div>
-            )}
-          </div>
+            </div>
 
-          {/* Engagement Meter */}
-          <div className="nexus-engagement">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] uppercase tracking-widest text-[#669BBC] font-bold">
-                🧠 AI Focus Monitor
-              </span>
-              <span className="text-xs font-extrabold" style={{ color: engagementColor }}>
-                {engagement}%
-              </span>
+            {/* Local */}
+            <div className="nexus-video-frame nexus-video-equal" style={{ borderColor: T.border, background: T.card }}>
+              <div className="nexus-video-label">You</div>
+              <video ref={localVideoRef} autoPlay playsInline muted className="nexus-video" style={{ transform:'scaleX(-1)' }} />
+              {camOff && (
+                <div className="nexus-video-placeholder">
+                  <VideoOff size={28} style={{ color: T.sub }} />
+                </div>
+              )}
             </div>
-            <div className="nexus-engagement-track">
-              <motion.div className="nexus-engagement-fill"
-                animate={{ width: `${engagement}%`, backgroundColor: engagementColor }}
-                transition={{ duration: 0.8 }} />
-            </div>
-            {engagement < 40 && (
-              <motion.p initial={{ opacity:0 }} animate={{ opacity:1 }}
-                className="text-[10px] text-red-400 mt-1 font-semibold">
-                ⚠️ Learner seems distracted — consider pausing!
-              </motion.p>
-            )}
           </div>
 
           {/* Controls */}
-          <div className="nexus-controls">
-            <motion.button whileHover={{ scale:1.1 }} whileTap={{ scale:0.9 }}
-              onClick={toggleMute}
-              className={`nexus-ctrl-btn ${muted ? 'nexus-ctrl-danger' : ''}`}>
+          <div className="nexus-controls" style={{ background: T.card, borderColor: T.border }}>
+            <motion.button whileHover={{ scale:1.1 }} whileTap={{ scale:0.9 }} onClick={toggleMute}
+              className={`nexus-ctrl-btn ${muted ? 'nexus-ctrl-danger' : ''}`} style={!muted ? { borderColor: T.border, color: T.text } : undefined}>
               {muted ? <MicOff size={18} /> : <Mic size={18} />}
             </motion.button>
-            <motion.button whileHover={{ scale:1.1 }} whileTap={{ scale:0.9 }}
-              onClick={toggleCam}
-              className={`nexus-ctrl-btn ${camOff ? 'nexus-ctrl-danger' : ''}`}>
+            <motion.button whileHover={{ scale:1.1 }} whileTap={{ scale:0.9 }} onClick={toggleCam}
+              className={`nexus-ctrl-btn ${camOff ? 'nexus-ctrl-danger' : ''}`} style={!camOff ? { borderColor: T.border, color: T.text } : undefined}>
               {camOff ? <VideoOff size={18} /> : <Video size={18} />}
             </motion.button>
-            <motion.button whileHover={{ scale:1.1 }} whileTap={{ scale:0.9 }}
-              onClick={() => setShowChat(c => !c)}
-              className={`nexus-ctrl-btn ${showChat ? 'nexus-ctrl-active' : ''}`}>
+            <motion.button whileHover={{ scale:1.1 }} whileTap={{ scale:0.9 }} onClick={() => setShowChat(c => !c)}
+              className={`nexus-ctrl-btn ${showChat ? 'nexus-ctrl-active' : ''}`} style={!showChat ? { borderColor: T.border, color: T.text } : undefined}>
               <MessageSquare size={18} />
             </motion.button>
-            <motion.button whileHover={{ scale:1.1 }} whileTap={{ scale:0.9 }}
-              onClick={() => setShowBoard(b => !b)}
-              className={`nexus-ctrl-btn ${showBoard ? 'nexus-ctrl-active' : ''}`}>
+            <motion.button whileHover={{ scale:1.1 }} whileTap={{ scale:0.9 }} onClick={() => setShowBoard(b => !b)}
+              className={`nexus-ctrl-btn ${showBoard ? 'nexus-ctrl-active' : ''}`} style={!showBoard ? { borderColor: T.border, color: T.text } : undefined}>
               <Pen size={18} />
             </motion.button>
-            <motion.button whileHover={{ scale:1.1 }} whileTap={{ scale:0.9 }}
-              onClick={raiseHand}
-              className="nexus-ctrl-btn">
+            <motion.button whileHover={{ scale:1.1 }} whileTap={{ scale:0.9 }} onClick={raiseHand}
+              className="nexus-ctrl-btn" style={{ borderColor: T.border, color: T.text }}>
               <Hand size={18} />
             </motion.button>
-            <motion.button whileHover={{ scale:1.05 }} whileTap={{ scale:0.95 }}
-              onClick={handleComplete}
-              className="nexus-complete-btn">
-              <CheckCircle size={16} /> Complete Session
+            <motion.button whileHover={{ scale:1.05 }} whileTap={{ scale:0.95 }} onClick={handleComplete}
+              disabled={sessionEnded} className="nexus-complete-btn" style={sessionEnded ? { opacity:0.5, pointerEvents:'none' } : undefined}>
+              <CheckCircle size={16} /> {sessionEnded ? 'Session Ended' : 'End Session'}
             </motion.button>
           </div>
 
           {/* Emoji Reactions */}
           <div className="nexus-emoji-row">
             {REACTIONS.map(e => (
-              <motion.button key={e} whileHover={{ scale:1.3 }} whileTap={{ scale:0.8 }}
-                onClick={() => sendReaction(e)}
-                className="text-2xl cursor-pointer select-none bg-white/5 rounded-xl p-2 hover:bg-white/10 transition-all">
+              <motion.button key={e} whileHover={{ scale:1.3 }} whileTap={{ scale:0.8 }} onClick={() => sendReaction(e)}
+                className="text-2xl cursor-pointer select-none rounded-xl p-2 transition-all" style={{ background: T.card }}>
                 {e}
               </motion.button>
             ))}
           </div>
         </div>
 
-        {/* ── Sidebar (Chat / Whiteboard) ────────────────────────────────── */}
+        {/* Chat Sidebar */}
         <AnimatePresence>
           {showChat && (
-            <ChatPanel key="chat" sessionId={sessionId} user={user}
-              onClose={() => setShowChat(false)} />
+            <ChatPanel key="chat" sessionId={sessionId} user={user} onClose={() => setShowChat(false)} />
           )}
         </AnimatePresence>
       </div>
 
-      {/* ── Whiteboard Panel (full-width below) ───────────────────────────── */}
+      {/* Whiteboard */}
       <AnimatePresence>
         {showBoard && (
-          <motion.div initial={{ opacity:0, y:40 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:40 }}
-            className="nexus-board-section">
+          <motion.div initial={{ opacity:0, y:40 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:40 }} className="nexus-board-section">
             <Whiteboard sessionId={sessionId} />
           </motion.div>
         )}
